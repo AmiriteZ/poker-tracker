@@ -3,10 +3,10 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import { AlertTriangle, MapPin, Pencil, Plus, Trash2, UserMinus, Check } from "lucide-react";
+import { AlertTriangle, ArrowRightLeft, Check, Coins, MapPin, Pencil, Plus, Trash2, UserMinus, X } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import type { GroupDetail, Session, SessionResultRow } from "@/lib/types";
+import type { ChipTransfer, GroupDetail, Session, SessionResultRow } from "@/lib/types";
 import { cn, money, netClass } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,6 +38,7 @@ export function SessionPage() {
 
   const removePlayer = useMutation({ mutationFn: (userId: string) => api.delete(`/groups/${groupId}/sessions/${sessionId}/players/${userId}`), onSuccess: refresh, onError: onErr });
   const addPlayer = useMutation({ mutationFn: (userId: string) => api.post(`/groups/${groupId}/sessions/${sessionId}/players`, { userId }), onSuccess: refresh, onError: onErr });
+  const removeTransfer = useMutation({ mutationFn: (id: string) => api.delete(`/groups/${groupId}/sessions/${sessionId}/transfers/${id}`), onSuccess: () => { refresh(); toast.success("Chip purchase removed"); }, onError: onErr });
   const del = useMutation({
     mutationFn: () => api.delete(`/groups/${groupId}/sessions/${sessionId}`),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["sessions", groupId] }); navigate(`/groups/${groupId}`); },
@@ -50,6 +51,8 @@ export function SessionPage() {
   const g = group.data;
   const s = session.data;
   const isAdmin = g.myRole === "ADMIN";
+  // Organisers can manage the game days they created; admins can manage all.
+  const canManage = isAdmin || (g.myRole === "ORGANISER" && s.createdBy.id === profile?.id);
   const cur = g.currency;
   const mine = s.results.find((r) => r.user.id === profile?.id);
   const ranked = [...s.results].sort((a, b) => {
@@ -57,6 +60,7 @@ export function SessionPage() {
     return (b.net ?? 0) - (a.net ?? 0);
   });
   const notSeated = g.members.filter((m) => !s.results.some((r) => r.user.id === m.user.id));
+  const myTransfers = s.transfers.filter((t) => t.from.id === profile?.id || t.to.id === profile?.id);
 
   return (
     <div>
@@ -64,7 +68,7 @@ export function SessionPage() {
         back={`/groups/${groupId}`}
         title={s.title ?? format(new Date(s.playedAt), "EEEE d MMMM")}
         subtitle={
-          <span className="inline-flex flex-wrap items-center gap-x-3">
+          <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-0.5">
             <span>{format(new Date(s.playedAt), "d MMM yyyy, HH:mm")}</span>
             {s.location ? (
               <span className="inline-flex items-center gap-1">
@@ -75,7 +79,7 @@ export function SessionPage() {
           </span>
         }
         actions={
-          isAdmin ? (
+          canManage ? (
             <>
               <EditSessionDialog groupId={groupId} session={s} onSaved={refresh} />
               <Button variant="ghost" size="icon" aria-label="Delete session" onClick={() => { if (confirm("Delete this session and all its results?")) del.mutate(); }}>
@@ -86,17 +90,48 @@ export function SessionPage() {
         }
       />
 
+      {/* Pot strip */}
+      <div className="mb-4 grid grid-cols-3 gap-2 sm:gap-3">
+        <StatChip label="Total pot" value={money(s.pot, cur)} icon={<Coins className="size-4" />} />
+        <StatChip label="Players" value={String(s.playerCount)} />
+        <StatChip label="Results in" value={`${s.submittedCount}/${s.playerCount}`} />
+      </div>
+
       {/* My result */}
       {mine ? (
         <Card className="mb-4 border-primary/40">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Your result</CardTitle>
             <CardDescription>
-              {mine.submitted ? "Submitted — you can still edit it." : "Enter what you bought in for (including rebuys) and what you left with."}
+              {mine.submitted
+                ? "Submitted — you can still edit it."
+                : "Enter what you bought in for from the bank (including rebuys) and what you cashed out. Chips bought from other players go in the section below."}
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-5">
             <ResultForm groupId={groupId} sessionId={sessionId} row={mine} currency={cur} onSaved={refresh} />
+
+            <div className="border-t pt-4">
+              <div className="mb-1 flex items-center gap-2 text-sm font-medium">
+                <ArrowRightLeft className="size-4 text-muted-foreground" /> Chips bought from other players
+              </div>
+              <p className="mb-3 text-xs text-muted-foreground">
+                Ran out of chips and bought some off a friend? Log it here. It adds to your buy-in and to their cash-out — the pot stays the same.
+              </p>
+              <ChipPurchaseForm groupId={groupId} sessionId={sessionId} session={s} meId={profile?.id ?? ""} currency={cur} onSaved={refresh} />
+              {myTransfers.length ? (
+                <ul className="mt-3 divide-y rounded-lg border">
+                  {myTransfers.map((t) => (
+                    <TransferRow key={t.id} t={t} meId={profile?.id ?? ""} currency={cur} onRemove={() => removeTransfer.mutate(t.id)} />
+                  ))}
+                </ul>
+              ) : null}
+              {mine.submitted && (mine.chipsBought || mine.chipsSold) ? (
+                <p className="mt-3 text-xs text-muted-foreground tabular">
+                  Effective: buy-in {money(mine.buyIn, cur)} · cash-out {money(mine.cashOut, cur)} → <span className={cn("font-semibold", netClass(mine.net))}>{money(mine.net, cur, { sign: true })}</span>
+                </p>
+              ) : null}
+            </div>
           </CardContent>
         </Card>
       ) : null}
@@ -105,16 +140,16 @@ export function SessionPage() {
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
-          <CardHeader className="flex-row items-center justify-between space-y-0 pb-3">
+          <CardHeader className="flex-row flex-wrap items-center justify-between gap-2 space-y-0 pb-3">
             <div>
               <CardTitle className="text-base">Results</CardTitle>
               <CardDescription>
                 {s.submittedCount}/{s.playerCount} submitted
               </CardDescription>
             </div>
-            {isAdmin && notSeated.length ? (
+            {canManage && notSeated.length ? (
               <Select onValueChange={(id) => addPlayer.mutate(id)}>
-                <SelectTrigger className="w-44">
+                <SelectTrigger className="w-40">
                   <SelectValue placeholder={<span className="inline-flex items-center gap-1"><Plus className="size-4" /> Seat player</span>} />
                 </SelectTrigger>
                 <SelectContent>
@@ -130,15 +165,18 @@ export function SessionPage() {
           <CardContent className="p-0">
             <div className="divide-y">
               {ranked.map((r, i) => (
-                <div key={r.id} className="flex items-center gap-3 px-5 py-3">
+                <div key={r.id} className="flex items-center gap-2 px-4 py-3 sm:gap-3 sm:px-5">
                   <div className="w-5 text-center text-sm tabular text-muted-foreground">{r.submitted ? i + 1 : "–"}</div>
-                  <Link to={`/groups/${groupId}/players/${r.user.id}`} className="flex min-w-0 flex-1 items-center gap-3 hover:underline">
+                  <Link to={`/groups/${groupId}/players/${r.user.id}`} className="flex min-w-0 flex-1 items-center gap-2 hover:underline sm:gap-3">
                     <UserAvatar name={r.user.displayName} src={r.user.avatarUrl} className="size-9" />
                     <div className="min-w-0">
                       <div className="truncate font-medium">{r.user.displayName}</div>
                       <div className="truncate text-xs tabular text-muted-foreground">
                         {r.submitted ? (
-                          <>In {money(r.buyIn, cur)} · Out {money(r.cashOut, cur)}</>
+                          <>
+                            In {money(r.buyIn, cur)} · Out {money(r.cashOut, cur)}
+                            {r.chipsBought || r.chipsSold ? <span className="hidden sm:inline"> · incl. player chips</span> : null}
+                          </>
                         ) : (
                           "Waiting for result"
                         )}
@@ -150,9 +188,9 @@ export function SessionPage() {
                   ) : (
                     <Badge variant="outline">Pending</Badge>
                   )}
-                  {isAdmin ? (
+                  {canManage ? (
                     <div className="flex items-center">
-                      <AdminEditResult groupId={groupId} sessionId={sessionId} row={r} currency={cur} onSaved={refresh} />
+                      {isAdmin ? <AdminEditResult groupId={groupId} sessionId={sessionId} row={r} currency={cur} onSaved={refresh} /> : null}
                       <Button size="icon" variant="ghost" aria-label="Remove from session" onClick={() => removePlayer.mutate(r.user.id)}>
                         <UserMinus className="size-4" />
                       </Button>
@@ -171,7 +209,8 @@ export function SessionPage() {
               <CardTitle className="text-base">Table</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
-              <Row label="Total buy-ins" value={money(s.totalBuyIn, cur)} />
+              <Row label="Total pot (bank buy-ins)" value={money(s.pot, cur)} />
+              <Row label="Total buy-ins incl. player chips" value={money(s.totalBuyIn, cur)} />
               <Row label="Total cash-outs" value={money(s.totalCashOut, cur)} />
               {s.discrepancy != null ? (
                 s.discrepancy === 0 ? (
@@ -188,6 +227,23 @@ export function SessionPage() {
               )}
             </CardContent>
           </Card>
+
+          {s.transfers.length ? (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Chip purchases</CardTitle>
+                <CardDescription>Between players, not from the bank.</CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                <ul className="divide-y">
+                  {s.transfers.map((t) => (
+                    <TransferRow key={t.id} t={t} meId={profile?.id ?? ""} currency={cur} canRemove={isAdmin || t.from.id === profile?.id || t.to.id === profile?.id} onRemove={() => removeTransfer.mutate(t.id)} />
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          ) : null}
+
           {s.topWinner ? (
             <Card>
               <CardHeader className="pb-3">
@@ -205,11 +261,23 @@ export function SessionPage() {
   );
 }
 
+function StatChip({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
+  return (
+    <div className="rounded-xl border bg-card px-3 py-2.5 sm:px-4 sm:py-3">
+      <div className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        {icon}
+        <span className="truncate">{label}</span>
+      </div>
+      <div className="mt-0.5 text-lg font-bold tabular sm:text-xl">{value}</div>
+    </div>
+  );
+}
+
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex justify-between">
+    <div className="flex justify-between gap-3">
       <span className="text-muted-foreground">{label}</span>
-      <span className="tabular font-medium">{value}</span>
+      <span className="tabular font-medium shrink-0">{value}</span>
     </div>
   );
 }
@@ -227,20 +295,85 @@ function Podium({ label, row, cur }: { label: string; row: SessionResultRow; cur
   );
 }
 
+function TransferRow({ t, meId, currency, canRemove = true, onRemove }: { t: ChipTransfer; meId: string; currency: string; canRemove?: boolean; onRemove: () => void }) {
+  const iBought = t.to.id === meId;
+  const iSold = t.from.id === meId;
+  return (
+    <li className="flex items-center gap-2 px-3 py-2 text-sm">
+      <UserAvatar name={t.to.displayName} src={t.to.avatarUrl} className="size-6" textClassName="text-[10px]" />
+      <div className="min-w-0 flex-1 leading-snug">
+        <span className="font-medium">{iBought ? "You" : t.to.displayName}</span>
+        <span className="text-muted-foreground"> bought </span>
+        <span className="tabular font-medium">{money(t.amount, currency)}</span>
+        <span className="text-muted-foreground"> from </span>
+        <span className="font-medium">{iSold ? "you" : t.from.displayName}</span>
+      </div>
+      {canRemove ? (
+        <Button size="icon" variant="ghost" className="size-7" aria-label="Remove" onClick={onRemove}>
+          <X className="size-3.5" />
+        </Button>
+      ) : null}
+    </li>
+  );
+}
+
+function ChipPurchaseForm({ groupId, sessionId, session, meId, currency, onSaved }: { groupId: string; sessionId: string; session: Session; meId: string; currency: string; onSaved: () => void }) {
+  const [amount, setAmount] = useState("");
+  const [fromUserId, setFromUserId] = useState("");
+  const others = session.results.filter((r) => r.user.id !== meId);
+  const add = useMutation({
+    mutationFn: () => api.post(`/groups/${groupId}/sessions/${sessionId}/transfers`, { fromUserId, amount: Number(amount) }),
+    onSuccess: () => { toast.success("Chip purchase added"); setAmount(""); setFromUserId(""); onSaved(); },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : "Could not add"),
+  });
+  if (others.length === 0) return <p className="text-xs text-muted-foreground">No other players seated yet.</p>;
+  return (
+    <form
+      onSubmit={(e: FormEvent) => { e.preventDefault(); add.mutate(); }}
+      className="grid grid-cols-[1fr_auto] gap-2 sm:grid-cols-[8rem_1fr_auto]"
+    >
+      <div className="space-y-1">
+        <Label className="text-xs">Amount ({currency})</Label>
+        <Input type="number" inputMode="decimal" min={0.01} step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="5" required />
+      </div>
+      <div className="col-span-2 space-y-1 sm:col-span-1">
+        <Label className="text-xs">Bought from</Label>
+        <Select value={fromUserId} onValueChange={setFromUserId}>
+          <SelectTrigger>
+            <SelectValue placeholder="Choose a player" />
+          </SelectTrigger>
+          <SelectContent>
+            {others.map((r) => (
+              <SelectItem key={r.user.id} value={r.user.id}>
+                {r.user.displayName}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="col-span-2 flex items-end sm:col-span-1">
+        <Button type="submit" variant="secondary" className="w-full sm:w-auto" loading={add.isPending} disabled={!fromUserId || !amount}>
+          <Plus /> Add
+        </Button>
+      </div>
+    </form>
+  );
+}
+
 function ResultForm({ groupId, sessionId, row, currency, onSaved, userId = "me", onDone }: { groupId: string; sessionId: string; row: SessionResultRow; currency: string; onSaved: () => void; userId?: string; onDone?: () => void }) {
-  const [buyIn, setBuyIn] = useState(row.submitted || row.buyIn ? String(row.buyIn) : "");
-  const [cashOut, setCashOut] = useState(row.cashOut != null ? String(row.cashOut) : "");
+  const [buyIn, setBuyIn] = useState(row.submitted || row.bankBuyIn ? String(row.bankBuyIn) : "");
+  const [cashOut, setCashOut] = useState(row.bankCashOut != null ? String(row.bankCashOut) : "");
   useEffect(() => {
-    setBuyIn(row.submitted || row.buyIn ? String(row.buyIn) : "");
-    setCashOut(row.cashOut != null ? String(row.cashOut) : "");
-  }, [row.id, row.buyIn, row.cashOut, row.submitted]);
+    setBuyIn(row.submitted || row.bankBuyIn ? String(row.bankBuyIn) : "");
+    setCashOut(row.bankCashOut != null ? String(row.bankCashOut) : "");
+  }, [row.id, row.bankBuyIn, row.bankCashOut, row.submitted]);
 
   const save = useMutation({
     mutationFn: () => api.put(`/groups/${groupId}/sessions/${sessionId}/results/${userId}`, { buyIn: Number(buyIn), cashOut: Number(cashOut) }),
     onSuccess: () => { toast.success("Result saved"); onSaved(); onDone?.(); },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : "Could not save"),
   });
-  const net = buyIn !== "" && cashOut !== "" ? Number(cashOut) - Number(buyIn) : null;
+  const net = buyIn !== "" && cashOut !== "" ? Number(cashOut) + row.chipsSold - Number(buyIn) - row.chipsBought : null;
 
   return (
     <form
@@ -248,7 +381,7 @@ function ResultForm({ groupId, sessionId, row, currency, onSaved, userId = "me",
       className="grid grid-cols-2 gap-3 sm:grid-cols-[1fr_1fr_auto_auto] sm:items-end"
     >
       <div className="space-y-1.5">
-        <Label>Buy-in ({currency})</Label>
+        <Label>Buy-in from bank ({currency})</Label>
         <Input type="number" inputMode="decimal" min={0} step="0.01" value={buyIn} onChange={(e) => setBuyIn(e.target.value)} placeholder="0" required />
       </div>
       <div className="space-y-1.5">
@@ -278,7 +411,7 @@ function AdminEditResult({ groupId, sessionId, row, currency, onSaved }: { group
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Result for {row.user.displayName}</DialogTitle>
-          <DialogDescription>Admins can fill this in on a player's behalf.</DialogDescription>
+          <DialogDescription>Admins can fill this in on a player's behalf. Bank figures only — chip purchases are listed on the session.</DialogDescription>
         </DialogHeader>
         <ResultForm groupId={groupId} sessionId={sessionId} row={row} currency={currency} onSaved={onSaved} userId={row.user.id} onDone={() => setOpen(false)} />
       </DialogContent>

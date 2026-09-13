@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { badRequest, forbidden, notFound, wrap } from "../lib/errors.js";
 import { requireAdmin, requireMember, uniqueGroupCode } from "../lib/access.js";
-import { dec, summarize, timeline, type ResultPoint } from "../lib/stats.js";
+import { effective, summarize, timeline, type ResultPoint } from "../lib/stats.js";
 
 export const groupsRouter = Router();
 
@@ -201,12 +201,12 @@ groupsRouter.patch(
   "/:groupId/members/:membershipId",
   wrap(async (req, res) => {
     await requireAdmin(req.user.id, req.params.groupId);
-    const { role } = z.object({ role: z.enum(["ADMIN", "MEMBER"]) }).parse(req.body);
+    const { role } = z.object({ role: z.enum(["ADMIN", "ORGANISER", "MEMBER"]) }).parse(req.body);
     const m = await prisma.membership.findFirst({ where: { id: req.params.membershipId, groupId: req.params.groupId } });
     if (!m) throw notFound("Member not found");
-    if (role === "MEMBER") {
+    if (role !== "ADMIN" && m.role === "ADMIN") {
       const admins = await prisma.membership.count({ where: { groupId: req.params.groupId, role: "ADMIN", status: "APPROVED" } });
-      if (admins <= 1 && m.role === "ADMIN") throw badRequest("A group needs at least one admin");
+      if (admins <= 1) throw badRequest("A group needs at least one admin");
     }
     const updated = await prisma.membership.update({ where: { id: m.id }, data: { role }, select: memberSelect });
     res.json(updated);
@@ -282,11 +282,10 @@ groupsRouter.get(
 );
 
 function toPoint(
-  r: { id: string; sessionId: string; buyIn: unknown; cashOut: unknown; session: { playedAt: Date; title: string | null; location: string | null } },
+  r: { id: string; sessionId: string; buyIn: unknown; cashOut: unknown; chipsBought: unknown; chipsSold: unknown; session: { playedAt: Date; title: string | null; location: string | null } },
   groupId: string
 ): ResultPoint {
-  const buyIn = dec(r.buyIn as never) ?? 0;
-  const cashOut = dec(r.cashOut as never);
+  const e = effective(r);
   return {
     id: r.id,
     date: r.session.playedAt.toISOString(),
@@ -294,8 +293,8 @@ function toPoint(
     groupId,
     groupName: null,
     sessionId: r.sessionId,
-    buyIn,
-    cashOut,
-    net: cashOut == null ? null : cashOut - buyIn,
+    buyIn: e.buyIn,
+    cashOut: e.cashOut,
+    net: e.net,
   };
 }

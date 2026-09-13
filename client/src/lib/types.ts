@@ -44,7 +44,7 @@ export interface MyStats {
   byGroup: { groupId: string; groupName: string; summary: Summary }[];
 }
 
-export type Role = "ADMIN" | "MEMBER";
+export type Role = "ADMIN" | "ORGANISER" | "MEMBER";
 export type MembershipStatus = "PENDING" | "APPROVED" | "REJECTED";
 
 export interface GroupListItem {
@@ -83,11 +83,26 @@ export interface GroupDetail {
 export interface SessionResultRow {
   id: string;
   user: PublicUser;
+  /** Effective figures: bank + chips bought/sold between players */
   buyIn: number;
   cashOut: number | null;
   net: number | null;
   submitted: boolean;
+  /** Bank figures (what the player typed) and the chip-purchase adjustments */
+  bankBuyIn: number;
+  bankCashOut: number | null;
+  chipsBought: number;
+  chipsSold: number;
   updatedAt: string;
+}
+
+export interface ChipTransfer {
+  id: string;
+  amount: number;
+  from: PublicUser; // seller
+  to: PublicUser; // buyer
+  createdById: string;
+  createdAt: string;
 }
 
 export interface Session {
@@ -100,8 +115,11 @@ export interface Session {
   createdAt: string;
   createdBy: PublicUser;
   results: SessionResultRow[];
+  transfers: ChipTransfer[];
   playerCount: number;
   submittedCount: number;
+  /** Chips bought from the bank — unchanged by player-to-player purchases */
+  pot: number;
   totalBuyIn: number;
   totalCashOut: number;
   discrepancy: number | null;

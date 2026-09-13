@@ -3,6 +3,31 @@ import { Prisma } from "../generated/prisma/client.js";
 export const dec = (d: Prisma.Decimal | number | null | undefined) =>
   d == null ? null : Number(d);
 
+/**
+ * Turns a SessionResult row into the numbers players actually care about.
+ * Bank figures + chip purchases between players:
+ *   effective buy-in  = buyIn + chipsBought
+ *   effective cash-out = cashOut + chipsSold   (null until the player submits)
+ */
+export function effective(r: { buyIn: unknown; cashOut: unknown; chipsBought: unknown; chipsSold: unknown }) {
+  const bankBuyIn = dec(r.buyIn as never) ?? 0;
+  const bankCashOut = dec(r.cashOut as never);
+  const chipsBought = dec(r.chipsBought as never) ?? 0;
+  const chipsSold = dec(r.chipsSold as never) ?? 0;
+  const buyIn = round(bankBuyIn + chipsBought);
+  const cashOut = bankCashOut == null ? null : round(bankCashOut + chipsSold);
+  return {
+    bankBuyIn,
+    bankCashOut,
+    chipsBought,
+    chipsSold,
+    buyIn,
+    cashOut,
+    net: cashOut == null ? null : round(cashOut - buyIn),
+    submitted: bankCashOut != null,
+  };
+}
+
 export interface ResultPoint {
   id: string;
   date: string; // ISO

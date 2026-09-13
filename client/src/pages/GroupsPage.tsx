@@ -67,6 +67,8 @@ export function GroupsPage() {
                     <Badge variant="secondary" className="gap-1 shrink-0">
                       <Crown className="size-3" /> Admin
                     </Badge>
+                  ) : g.role === "ORGANISER" ? (
+                    <Badge variant="secondary" className="shrink-0">Organiser</Badge>
                   ) : null}
                 </div>
                 <div className="mt-5 flex items-center gap-4 text-sm text-muted-foreground">

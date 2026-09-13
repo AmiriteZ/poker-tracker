@@ -2,8 +2,8 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { badRequest, forbidden, notFound, wrap } from "../lib/errors.js";
-import { requireAdmin, requireMember } from "../lib/access.js";
-import { dec, round } from "../lib/stats.js";
+import { requireMember, requireOrganiser, requireSessionManager } from "../lib/access.js";
+import { dec, effective, round } from "../lib/stats.js";
 
 /** Mounted at /groups/:groupId/sessions */
 export const sessionsRouter = Router({ mergeParams: true });
@@ -12,8 +12,14 @@ const userSelect = { id: true, displayName: true, avatarUrl: true } as const;
 
 const sessionInclude = {
   results: { include: { user: { select: userSelect } }, orderBy: { createdAt: "asc" } },
+  transfers: {
+    include: { from: { select: userSelect }, to: { select: userSelect } },
+    orderBy: { createdAt: "asc" },
+  },
   createdBy: { select: userSelect },
 } as const;
+
+type PublicUser = { id: string; displayName: string; avatarUrl: string | null };
 
 type SessionRow = {
   id: string;
@@ -23,32 +29,50 @@ type SessionRow = {
   notes: string | null;
   playedAt: Date;
   createdAt: Date;
-  createdBy: { id: string; displayName: string; avatarUrl: string | null };
+  createdById: string;
+  createdBy: PublicUser;
   results: Array<{
     id: string;
     userId: string;
     buyIn: unknown;
     cashOut: unknown;
+    chipsBought: unknown;
+    chipsSold: unknown;
     updatedAt: Date;
-    user: { id: string; displayName: string; avatarUrl: string | null };
+    user: PublicUser;
+  }>;
+  transfers: Array<{
+    id: string;
+    amount: unknown;
+    createdById: string;
+    createdAt: Date;
+    from: PublicUser;
+    to: PublicUser;
   }>;
 };
 
 function serialize(s: SessionRow) {
   const results = s.results.map((r) => {
-    const buyIn = dec(r.buyIn as never) ?? 0;
-    const cashOut = dec(r.cashOut as never);
+    const e = effective(r);
     return {
       id: r.id,
       user: r.user,
-      buyIn,
-      cashOut,
-      net: cashOut == null ? null : round(cashOut - buyIn),
-      submitted: cashOut != null,
+      // Effective figures (what the player is actually up/down)
+      buyIn: e.buyIn,
+      cashOut: e.cashOut,
+      net: e.net,
+      submitted: e.submitted,
+      // Bank figures + chip purchases, for the form and the breakdown
+      bankBuyIn: e.bankBuyIn,
+      bankCashOut: e.bankCashOut,
+      chipsBought: e.chipsBought,
+      chipsSold: e.chipsSold,
       updatedAt: r.updatedAt,
     };
   });
   const submitted = results.filter((r) => r.submitted);
+  // Pot = chips bought from the bank. Player-to-player purchases don't add chips to the table.
+  const pot = round(results.reduce((a, r) => a + r.bankBuyIn, 0));
   const totalBuyIn = round(results.reduce((a, r) => a + r.buyIn, 0));
   const totalCashOut = round(submitted.reduce((a, r) => a + (r.cashOut ?? 0), 0));
   const ranked = [...submitted].sort((a, b) => (b.net ?? 0) - (a.net ?? 0));
@@ -62,15 +86,28 @@ function serialize(s: SessionRow) {
     createdAt: s.createdAt,
     createdBy: s.createdBy,
     results,
+    transfers: s.transfers.map((t) => ({
+      id: t.id,
+      amount: dec(t.amount as never) ?? 0,
+      from: t.from,
+      to: t.to,
+      createdById: t.createdById,
+      createdAt: t.createdAt,
+    })),
     playerCount: results.length,
     submittedCount: submitted.length,
+    pot,
     totalBuyIn,
     totalCashOut,
     // Non-zero means the table doesn't balance (someone typed a wrong number).
-    discrepancy: submitted.length === results.length ? round(totalCashOut - totalBuyIn) : null,
+    discrepancy: submitted.length === results.length && results.length > 0 ? round(totalCashOut - totalBuyIn) : null,
     topWinner: ranked[0] ?? null,
     topLoser: ranked.length > 1 ? ranked[ranked.length - 1] : null,
   };
+}
+
+async function loadSession(sessionId: string) {
+  return prisma.session.findUniqueOrThrow({ where: { id: sessionId }, include: sessionInclude });
 }
 
 sessionsRouter.get(
@@ -98,7 +135,7 @@ sessionsRouter.post(
   "/",
   wrap(async (req, res) => {
     const { groupId } = req.params as { groupId: string };
-    await requireAdmin(req.user.id, groupId);
+    await requireOrganiser(req.user.id, groupId);
     const body = sessionBody.extend({ playerIds: z.array(z.string()).default([]) }).parse(req.body);
 
     // Only approved members may be seated.
@@ -141,10 +178,8 @@ sessionsRouter.patch(
   "/:sessionId",
   wrap(async (req, res) => {
     const { groupId, sessionId } = req.params as { groupId: string; sessionId: string };
-    await requireAdmin(req.user.id, groupId);
+    await requireSessionManager(req.user.id, groupId, sessionId);
     const body = sessionBody.partial().parse(req.body);
-    const exists = await prisma.session.findFirst({ where: { id: sessionId, groupId } });
-    if (!exists) throw notFound("Session not found");
     const session = await prisma.session.update({ where: { id: sessionId }, data: body, include: sessionInclude });
     res.json(serialize(session));
   })
@@ -154,23 +189,19 @@ sessionsRouter.delete(
   "/:sessionId",
   wrap(async (req, res) => {
     const { groupId, sessionId } = req.params as { groupId: string; sessionId: string };
-    await requireAdmin(req.user.id, groupId);
-    const exists = await prisma.session.findFirst({ where: { id: sessionId, groupId } });
-    if (!exists) throw notFound("Session not found");
+    await requireSessionManager(req.user.id, groupId, sessionId);
     await prisma.session.delete({ where: { id: sessionId } });
     res.status(204).end();
   })
 );
 
-/** Admin seats a player at the session. */
+/** Seat a player at the session (admin, or the organiser who created it). */
 sessionsRouter.post(
   "/:sessionId/players",
   wrap(async (req, res) => {
     const { groupId, sessionId } = req.params as { groupId: string; sessionId: string };
-    await requireAdmin(req.user.id, groupId);
+    await requireSessionManager(req.user.id, groupId, sessionId);
     const { userId } = z.object({ userId: z.string() }).parse(req.body);
-    const session = await prisma.session.findFirst({ where: { id: sessionId, groupId } });
-    if (!session) throw notFound("Session not found");
     const member = await prisma.membership.findUnique({ where: { userId_groupId: { userId, groupId } } });
     if (!member || member.status !== "APPROVED") throw badRequest("User is not an approved member");
     await prisma.sessionResult.upsert({
@@ -178,8 +209,7 @@ sessionsRouter.post(
       update: {},
       create: { sessionId, userId },
     });
-    const updated = await prisma.session.findUniqueOrThrow({ where: { id: sessionId }, include: sessionInclude });
-    res.status(201).json(serialize(updated));
+    res.status(201).json(serialize(await loadSession(sessionId)));
   })
 );
 
@@ -187,12 +217,11 @@ sessionsRouter.delete(
   "/:sessionId/players/:userId",
   wrap(async (req, res) => {
     const { groupId, sessionId, userId } = req.params as { groupId: string; sessionId: string; userId: string };
-    await requireAdmin(req.user.id, groupId);
-    const session = await prisma.session.findFirst({ where: { id: sessionId, groupId } });
-    if (!session) throw notFound("Session not found");
+    await requireSessionManager(req.user.id, groupId, sessionId);
+    const involved = await prisma.chipTransfer.count({ where: { sessionId, OR: [{ fromUserId: userId }, { toUserId: userId }] } });
+    if (involved) throw badRequest("Remove this player's chip purchases first");
     await prisma.sessionResult.deleteMany({ where: { sessionId, userId } });
-    const updated = await prisma.session.findUniqueOrThrow({ where: { id: sessionId }, include: sessionInclude });
-    res.json(serialize(updated));
+    res.json(serialize(await loadSession(sessionId)));
   })
 );
 
@@ -202,8 +231,8 @@ const resultBody = z.object({
 });
 
 /**
- * Submit a result. Players may only edit their own row; admins may fill in
- * anyone's (handy when a friend forgets).
+ * Submit a result (bank buy-in + cash-out). Players may only edit their own row;
+ * admins may fill in anyone's. Organisers cannot edit other players' figures.
  */
 sessionsRouter.put(
   "/:sessionId/results/:userId",
@@ -220,7 +249,78 @@ sessionsRouter.put(
     if (!seat) throw forbidden("You were not added to this session — ask an admin to seat you");
 
     await prisma.sessionResult.update({ where: { id: seat.id }, data: body });
-    const updated = await prisma.session.findUniqueOrThrow({ where: { id: sessionId }, include: sessionInclude });
-    res.json(serialize(updated));
+    res.json(serialize(await loadSession(sessionId)));
+  })
+);
+
+/* ---------------- Chip purchases between players ---------------- */
+
+/** Recompute the denormalised chipsBought / chipsSold on every seat in the session. */
+async function syncChipTotals(tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0], sessionId: string) {
+  const [seats, transfers] = await Promise.all([
+    tx.sessionResult.findMany({ where: { sessionId }, select: { id: true, userId: true } }),
+    tx.chipTransfer.findMany({ where: { sessionId }, select: { fromUserId: true, toUserId: true, amount: true } }),
+  ]);
+  for (const seat of seats) {
+    const bought = transfers.filter((t) => t.toUserId === seat.userId).reduce((a, t) => a + Number(t.amount), 0);
+    const sold = transfers.filter((t) => t.fromUserId === seat.userId).reduce((a, t) => a + Number(t.amount), 0);
+    await tx.sessionResult.update({ where: { id: seat.id }, data: { chipsBought: round(bought), chipsSold: round(sold) } });
+  }
+}
+
+const transferBody = z.object({
+  fromUserId: z.string(), // seller
+  toUserId: z.string().optional(), // buyer — defaults to the caller
+  amount: z.coerce.number().positive().max(1_000_000),
+});
+
+/**
+ * Record "buyer bought `amount` of chips from seller". The buyer records it
+ * (toUserId defaults to the caller). Admins may record one for any pair.
+ */
+sessionsRouter.post(
+  "/:sessionId/transfers",
+  wrap(async (req, res) => {
+    const { groupId, sessionId } = req.params as { groupId: string; sessionId: string };
+    const me = await requireMember(req.user.id, groupId);
+    const body = transferBody.parse(req.body);
+    const toUserId = body.toUserId ?? req.user.id;
+    if (toUserId !== req.user.id && me.role !== "ADMIN") throw forbidden("You can only record chips you bought yourself");
+    if (body.fromUserId === toUserId) throw badRequest("Buyer and seller must be different players");
+
+    const session = await prisma.session.findFirst({ where: { id: sessionId, groupId } });
+    if (!session) throw notFound("Session not found");
+    const seated = await prisma.sessionResult.findMany({
+      where: { sessionId, userId: { in: [body.fromUserId, toUserId] } },
+      select: { userId: true },
+    });
+    if (seated.length !== 2) throw badRequest("Both players must be seated at this game day");
+
+    await prisma.$transaction(async (tx) => {
+      await tx.chipTransfer.create({
+        data: { sessionId, fromUserId: body.fromUserId, toUserId, amount: round(body.amount), createdById: req.user.id },
+      });
+      await syncChipTotals(tx, sessionId);
+    });
+    res.status(201).json(serialize(await loadSession(sessionId)));
+  })
+);
+
+/** Buyer, seller, or an admin can remove a chip purchase. */
+sessionsRouter.delete(
+  "/:sessionId/transfers/:transferId",
+  wrap(async (req, res) => {
+    const { groupId, sessionId, transferId } = req.params as { groupId: string; sessionId: string; transferId: string };
+    const me = await requireMember(req.user.id, groupId);
+    const t = await prisma.chipTransfer.findFirst({ where: { id: transferId, sessionId, session: { groupId } } });
+    if (!t) throw notFound("Chip purchase not found");
+    const allowed = me.role === "ADMIN" || t.fromUserId === req.user.id || t.toUserId === req.user.id;
+    if (!allowed) throw forbidden("Only the buyer, the seller or an admin can remove this");
+
+    await prisma.$transaction(async (tx) => {
+      await tx.chipTransfer.delete({ where: { id: t.id } });
+      await syncChipTotals(tx, sessionId);
+    });
+    res.json(serialize(await loadSession(sessionId)));
   })
 );

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { wrap } from "../lib/errors.js";
 import { signAvatarUpload } from "../lib/cloudinary.js";
-import { dec, summarize, timeline, type ResultPoint } from "../lib/stats.js";
+import { dec, effective, summarize, timeline, type ResultPoint } from "../lib/stats.js";
 
 export const meRouter = Router();
 
@@ -55,17 +55,20 @@ meRouter.get(
       prisma.soloGame.findMany({ where: { userId: req.user.id } }),
     ]);
 
-    const groupPoints: ResultPoint[] = results.map((r) => ({
-      id: r.id,
-      date: r.session.playedAt.toISOString(),
-      label: r.session.title ?? r.session.location ?? "Session",
-      groupId: r.session.group.id,
-      groupName: r.session.group.name,
-      sessionId: r.sessionId,
-      buyIn: dec(r.buyIn) ?? 0,
-      cashOut: dec(r.cashOut),
-      net: r.cashOut == null ? null : (dec(r.cashOut) ?? 0) - (dec(r.buyIn) ?? 0),
-    }));
+    const groupPoints: ResultPoint[] = results.map((r) => {
+      const e = effective(r);
+      return {
+        id: r.id,
+        date: r.session.playedAt.toISOString(),
+        label: r.session.title ?? r.session.location ?? "Session",
+        groupId: r.session.group.id,
+        groupName: r.session.group.name,
+        sessionId: r.sessionId,
+        buyIn: e.buyIn,
+        cashOut: e.cashOut,
+        net: e.net,
+      };
+    });
 
     const soloPoints: ResultPoint[] = solo.map((g) => ({
       id: g.id,

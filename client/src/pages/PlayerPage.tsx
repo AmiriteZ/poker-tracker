@@ -1,7 +1,7 @@
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Crown } from "lucide-react";
+import { ClipboardList, Crown } from "lucide-react";
 import { api } from "@/lib/api";
 import type { GroupDetail, PlayerStats } from "@/lib/types";
 import { cn, money, netClass } from "@/lib/utils";
@@ -32,7 +32,7 @@ export function PlayerPage() {
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
             {p.user.displayName}
-            {p.role === "ADMIN" ? <Crown className="size-5 text-muted-foreground" /> : null}
+            {p.role === "ADMIN" ? <Crown className="size-5 text-muted-foreground" /> : p.role === "ORGANISER" ? <ClipboardList className="size-5 text-muted-foreground" /> : null}
           </h1>
           <p className="text-sm text-muted-foreground">Results in {g.name}</p>
         </div>

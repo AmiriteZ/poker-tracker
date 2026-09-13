@@ -27,3 +27,15 @@ export function netClass(n: number | null | undefined) {
   if (n < 0) return "text-loss";
   return "text-muted-foreground";
 }
+
+export const ROLE_LABEL: Record<"ADMIN" | "ORGANISER" | "MEMBER", string> = {
+  ADMIN: "Admin",
+  ORGANISER: "Organiser",
+  MEMBER: "Member",
+};
+
+export const ROLE_HELP: Record<"ADMIN" | "ORGANISER" | "MEMBER", string> = {
+  ADMIN: "Approves members, manages roles and every game day, can edit any result.",
+  ORGANISER: "Can create game days and manage the ones they created. Can't approve members or edit others' results.",
+  MEMBER: "Can view everything and submit their own results.",
+};

@@ -83,14 +83,15 @@ export function ProfilePage() {
         </button>
         <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
         <div className="min-w-0 flex-1">
-          <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
-            {profile.displayName}
+          <h1 className="flex min-w-0 items-center gap-2 text-2xl font-bold tracking-tight">
+            <span className="truncate">{profile.displayName}</span>
             <EditNameDialog profile={profile} onSaved={refreshProfile} />
           </h1>
-          <p className="text-sm text-muted-foreground">{profile.email}</p>
+          <p className="truncate text-sm text-muted-foreground">{profile.email}</p>
         </div>
+        {/* On phones this lives in the stat grid instead (see StatTiles `extra`) */}
         {stats.data ? (
-          <div className="rounded-xl border bg-card px-5 py-3 text-right">
+          <div className="hidden rounded-xl border bg-card px-5 py-3 text-right md:block">
             <div className="text-xs text-muted-foreground">All-time net</div>
             <div className={cn("text-2xl font-bold tabular", netClass(stats.data.all.summary.net))}>{money(stats.data.all.summary.net, "€", { sign: true })}</div>
           </div>
@@ -117,7 +118,7 @@ export function ProfilePage() {
             <StatsPanel block={stats.data.all} />
           </TabsContent>
           <TabsContent value="groups" className="space-y-4">
-            <StatsPanel block={stats.data.groups} />
+            <StatsPanel block={stats.data.groups} allTimeNet={stats.data.all.summary.net} />
             {stats.data.byGroup.length ? (
               <Card>
                 <CardHeader className="pb-3">
@@ -143,7 +144,7 @@ export function ProfilePage() {
             ) : null}
           </TabsContent>
           <TabsContent value="solo">
-            <StatsPanel block={stats.data.solo} />
+            <StatsPanel block={stats.data.solo} allTimeNet={stats.data.all.summary.net} />
           </TabsContent>
         </Tabs>
       )}

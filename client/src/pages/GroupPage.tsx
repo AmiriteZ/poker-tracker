@@ -6,6 +6,8 @@ import { toast } from "sonner";
 import {
   CalendarDays,
   Check,
+  ClipboardList,
+  Coins,
   Copy,
   Crown,
   MapPin,
@@ -21,8 +23,8 @@ import {
 } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import type { GroupDetail, LeaderboardRow, Member, Session } from "@/lib/types";
-import { cn, money, netClass } from "@/lib/utils";
+import type { GroupDetail, LeaderboardRow, Member, Role, Session } from "@/lib/types";
+import { cn, money, netClass, ROLE_HELP, ROLE_LABEL } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -33,6 +35,7 @@ import { UserAvatar } from "@/components/ui/avatar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState, PageHeader } from "@/components/layout";
 
 export function GroupPage() {
@@ -55,6 +58,7 @@ export function GroupPage() {
   }
   const g = group.data;
   const isAdmin = g.myRole === "ADMIN";
+  const canCreate = isAdmin || g.myRole === "ORGANISER";
 
   return (
     <div>
@@ -67,7 +71,7 @@ export function GroupPage() {
             {g.members.length} member{g.members.length === 1 ? "" : "s"}
           </>
         }
-        actions={isAdmin ? <NewSessionDialog group={g} /> : null}
+        actions={canCreate ? <NewSessionDialog group={g} /> : null}
       />
 
       <Tabs value={tab} onValueChange={(v) => setParams({ tab: v })}>
@@ -109,13 +113,14 @@ function SessionsTab({ group }: { group: GroupDetail }) {
 
   if (sessions.isLoading) return <Skeleton className="h-48" />;
   const list = sessions.data ?? [];
+  const canCreate = group.myRole === "ADMIN" || group.myRole === "ORGANISER";
   if (list.length === 0) {
     return (
       <EmptyState
         icon={CalendarDays}
         title="No game days yet"
-        body={group.myRole === "ADMIN" ? "Create the first session and seat the players who showed up." : "An admin will add sessions when you play."}
-        action={group.myRole === "ADMIN" ? <NewSessionDialog group={group} /> : undefined}
+        body={canCreate ? "Create the first session and seat the players who showed up." : "An admin or organiser will add sessions when you play."}
+        action={canCreate ? <NewSessionDialog group={group} /> : undefined}
       />
     );
   }
@@ -137,6 +142,9 @@ function SessionsTab({ group }: { group: GroupDetail }) {
                     </span>
                   ) : null}
                   <span>{s.playerCount} players</span>
+                  <span className="inline-flex items-center gap-1 font-medium text-foreground tabular">
+                    <Coins className="size-3" /> Pot {money(s.pot, group.currency)}
+                  </span>
                 </div>
               </div>
               {mine ? (
@@ -328,7 +336,7 @@ function PlayersTab({ group }: { group: GroupDetail }) {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5 truncate font-medium">
                   {r.user.displayName}
-                  {r.role === "ADMIN" ? <Crown className="size-3.5 text-muted-foreground" /> : null}
+                  <RoleIcon role={r.role} />
                 </div>
                 <div className="text-xs text-muted-foreground">
                   {r.summary.submitted} session{r.summary.submitted === 1 ? "" : "s"} · {r.summary.wins}W {r.summary.losses}L
@@ -358,7 +366,7 @@ function ManageTab({ group }: { group: GroupDetail }) {
 
   const approve = useMutation({ mutationFn: (id: string) => api.post(`/groups/${group.id}/members/${id}/approve`), onSuccess: () => { refresh(); toast.success("Member approved"); }, onError: onErr });
   const reject = useMutation({ mutationFn: (id: string) => api.post(`/groups/${group.id}/members/${id}/reject`), onSuccess: refresh, onError: onErr });
-  const setRole = useMutation({ mutationFn: ({ id, role }: { id: string; role: "ADMIN" | "MEMBER" }) => api.patch(`/groups/${group.id}/members/${id}`, { role }), onSuccess: refresh, onError: onErr });
+  const setRole = useMutation({ mutationFn: ({ id, role }: { id: string; role: Role }) => api.patch(`/groups/${group.id}/members/${id}`, { role }), onSuccess: () => { refresh(); toast.success("Role updated"); }, onError: onErr });
   const remove = useMutation({ mutationFn: (id: string) => api.delete(`/groups/${group.id}/members/${id}`), onSuccess: refresh, onError: onErr });
   const regen = useMutation({ mutationFn: () => api.post<{ code: string }>(`/groups/${group.id}/regenerate-code`), onSuccess: () => { refresh(); toast.success("New code generated"); }, onError: onErr });
   const leave = useMutation({
@@ -383,14 +391,14 @@ function ManageTab({ group }: { group: GroupDetail }) {
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex items-center gap-2">
-            <div className="flex-1 rounded-md border bg-muted/40 px-3 py-2 font-mono text-lg tracking-[0.3em]">{group.code}</div>
-            <Button variant="outline" size="icon" onClick={() => copy(group.code ?? "", "Code")} aria-label="Copy code">
+            <div className="min-w-0 flex-1 rounded-md border bg-muted/40 px-3 py-2 font-mono text-lg tracking-[0.3em]">{group.code}</div>
+            <Button variant="outline" size="icon" className="shrink-0" onClick={() => copy(group.code ?? "", "Code")} aria-label="Copy code">
               <Copy />
             </Button>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="flex-1 truncate rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">{link}</div>
-            <Button variant="outline" size="icon" onClick={() => copy(link, "Link")} aria-label="Copy link">
+          <div className="flex items-start gap-2">
+            <div className="min-w-0 flex-1 break-all rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">{link}</div>
+            <Button variant="outline" size="icon" className="shrink-0" onClick={() => copy(link, "Link")} aria-label="Copy link">
               <Link2 />
             </Button>
           </div>
@@ -411,16 +419,16 @@ function ManageTab({ group }: { group: GroupDetail }) {
           ) : (
             <div className="divide-y">
               {group.pending.map((m) => (
-                <div key={m.id} className="flex items-center gap-3 px-5 py-3">
+                <div key={m.id} className="flex items-center gap-2 px-4 py-3 sm:gap-3 sm:px-5">
                   <UserAvatar name={m.user.displayName} src={m.user.avatarUrl} className="size-9" />
                   <div className="min-w-0 flex-1">
                     <div className="truncate font-medium">{m.user.displayName}</div>
                     <div className="truncate text-xs text-muted-foreground">{m.user.email}</div>
                   </div>
-                  <Button size="sm" onClick={() => approve.mutate(m.id)} loading={approve.isPending}>
-                    <Check /> Approve
+                  <Button size="sm" className="shrink-0" onClick={() => approve.mutate(m.id)} loading={approve.isPending}>
+                    <Check /> <span className="hidden sm:inline">Approve</span>
                   </Button>
-                  <Button size="sm" variant="ghost" onClick={() => reject.mutate(m.id)} aria-label="Reject">
+                  <Button size="sm" variant="ghost" className="shrink-0" onClick={() => reject.mutate(m.id)} aria-label="Reject">
                     <X />
                   </Button>
                 </div>
@@ -432,15 +440,19 @@ function ManageTab({ group }: { group: GroupDetail }) {
 
       <Card className="lg:col-span-2">
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Members</CardTitle>
-          <CardDescription>Admins can create game days, seat players and approve requests.</CardDescription>
+          <CardTitle className="text-base">Members & roles</CardTitle>
+          <CardDescription>
+            <span className="block"><span className="font-medium text-foreground">Admin</span> — {ROLE_HELP.ADMIN}</span>
+            <span className="block"><span className="font-medium text-foreground">Organiser</span> — {ROLE_HELP.ORGANISER}</span>
+            <span className="block"><span className="font-medium text-foreground">Member</span> — {ROLE_HELP.MEMBER}</span>
+          </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
           <div className="divide-y">
             {group.members.map((m: Member) => {
               const isMe = m.user.id === profile?.id;
               return (
-                <div key={m.id} className="flex items-center gap-3 px-5 py-3">
+                <div key={m.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 sm:px-5">
                   <UserAvatar name={m.user.displayName} src={m.user.avatarUrl} className="size-9" />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 truncate font-medium">
@@ -448,17 +460,25 @@ function ManageTab({ group }: { group: GroupDetail }) {
                     </div>
                     <div className="truncate text-xs text-muted-foreground">Joined {format(new Date(m.createdAt), "d MMM yyyy")}</div>
                   </div>
-                  <Badge variant={m.role === "ADMIN" ? "default" : "secondary"}>{m.role === "ADMIN" ? "Admin" : "Member"}</Badge>
-                  {!isMe ? (
-                    <>
-                      <Button size="sm" variant="outline" onClick={() => setRole.mutate({ id: m.id, role: m.role === "ADMIN" ? "MEMBER" : "ADMIN" })}>
-                        {m.role === "ADMIN" ? "Demote" : "Make admin"}
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={() => remove.mutate(m.id)} aria-label="Remove">
+                  {isMe ? (
+                    <Badge variant="default">{ROLE_LABEL[m.role]}</Badge>
+                  ) : (
+                    <div className="flex w-full items-center gap-1 sm:w-auto">
+                      <Select value={m.role} onValueChange={(role) => setRole.mutate({ id: m.id, role: role as Role })}>
+                        <SelectTrigger className="h-8 w-full sm:w-32">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ADMIN">Admin</SelectItem>
+                          <SelectItem value="ORGANISER">Organiser</SelectItem>
+                          <SelectItem value="MEMBER">Member</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button size="sm" variant="ghost" className="shrink-0" onClick={() => { if (confirm(`Remove ${m.user.displayName} from the group?`)) remove.mutate(m.id); }} aria-label="Remove">
                         <UserMinus />
                       </Button>
-                    </>
-                  ) : null}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -475,4 +495,10 @@ function ManageTab({ group }: { group: GroupDetail }) {
       ) : null}
     </div>
   );
+}
+
+function RoleIcon({ role }: { role: Role }) {
+  if (role === "ADMIN") return <Crown className="size-3.5 shrink-0 text-muted-foreground" aria-label="Admin" />;
+  if (role === "ORGANISER") return <ClipboardList className="size-3.5 shrink-0 text-muted-foreground" aria-label="Organiser" />;
+  return null;
 }

@@ -13,8 +13,10 @@ poker-tracker/
 
 - **Accounts** via Firebase Auth (email/password + Google).
 - **Groups** — create one, get a 7-character code + invite link. Friends enter the code, the admin confirms them. You can be in as many groups as you like.
-- **Game days** (admin) — pick a date, location (free text) and seat the players who showed up.
-- **Results** (players) — each player enters their own buy-in (including rebuys) and cash-out. Net = cash-out − buy-in. The session page shows the night's top winner / biggest loser and warns when the table doesn't balance.
+- **Roles** — *Admin* (everything), *Organiser* (creates game days and manages the ones they created; can't approve members or edit others' results), *Member* (view + own results).
+- **Game days** (admin or organiser) — pick a date, location (free text) and seat the players who showed up. Each card shows the total pot.
+- **Results** (players) — each player enters their own bank buy-in (including rebuys) and cash-out. Net = cash-out − buy-in. The session page shows the pot, the night's top winner / biggest loser, and warns when the table doesn't balance.
+- **Chip purchases between players** — bought chips off a friend mid-game? Log it (amount + who from) on your result. It raises your buy-in and their cash-out by that amount; the pot is unchanged and the balance check still works.
 - **Player profiles** — stats + cumulative profit chart + per-session bars, filterable by 30d / 90d / 1y / all.
 - **Leaderboard** per group.
 - **Your profile** — all-time totals across every group and solo games, per-group breakdown, Cloudinary avatar upload, display-name edit.
@@ -82,11 +84,13 @@ npm run dev
 
 **Auth flow.** The React app signs in with the Firebase Web SDK and attaches the ID token as `Authorization: Bearer …` to every `/api` call. `server/src/middleware/auth.ts` verifies it with the Firebase Admin SDK and upserts a `User` row, so the rest of the API works with our own user ids. Nothing under `/api` is reachable without a valid token.
 
-**Permissions.** `server/src/lib/access.ts` has `requireMember` / `requireAdmin`. Members see approved members, sessions, leaderboards and player stats. Admins additionally see pending requests + the invite code, and can create/edit/delete sessions, seat/unseat players, fill in a result on a player's behalf, approve/reject requests, promote/demote, and remove members. Players can only write their *own* result row.
+**Permissions.** `server/src/lib/access.ts` has `requireMember` / `requireOrganiser` / `requireAdmin` / `requireSessionManager`. Members see approved members, sessions, leaderboards and player stats and can only write their *own* result row. Organisers can additionally create game days and edit/delete/seat players on the ones they created. Admins can do all of that on any game day, plus see pending requests + the invite code, fill in a result on a player's behalf, approve/reject requests, change roles, and remove members. A group always keeps at least one admin.
+
+**Chip purchases.** `ChipTransfer` rows (session, seller, buyer, amount). The API keeps `SessionResult.chipsBought` / `chipsSold` in sync so every stats query just uses `buyIn + chipsBought` and `cashOut + chipsSold`. A player can only record purchases where *they* are the buyer (admins can record any); buyer, seller or admin can delete one.
 
 **Join flow.** Admin shares `https://<app>/join/<CODE>` or just the code → user requests to join (membership `PENDING`) → admin approves in the group's *Manage* tab.
 
-**Data model** (`server/prisma/schema.prisma`): `User`, `Group`, `Membership` (role + status), `Session`, `SessionResult` (one per seated player; `cashOut` null until submitted), `SoloGame`.
+**Data model** (`server/prisma/schema.prisma`): `User`, `Group`, `Membership` (role ADMIN/ORGANISER/MEMBER + status), `Session`, `SessionResult` (one per seated player; `cashOut` null until submitted; `chipsBought`/`chipsSold` denormalised), `ChipTransfer`, `SoloGame`.
 
 **Avatars.** The API signs a Cloudinary upload (`POST /api/me/avatar/sign`); the browser uploads straight to Cloudinary, then saves the returned URL via `PATCH /api/me`. The API secret never leaves the server.
 
@@ -106,10 +110,12 @@ npm run dev
 | PATCH/DELETE | `/api/groups/:id/members/:mid` | admin (or self-leave) |
 | GET | `/api/groups/:id/leaderboard` | member |
 | GET | `/api/groups/:id/players/:userId/stats` | member |
-| GET/POST | `/api/groups/:id/sessions` | member / admin |
-| GET/PATCH/DELETE | `/api/groups/:id/sessions/:sid` | member / admin |
-| POST/DELETE | `/api/groups/:id/sessions/:sid/players[/:userId]` | admin |
+| GET/POST | `/api/groups/:id/sessions` | member / admin or organiser |
+| GET/PATCH/DELETE | `/api/groups/:id/sessions/:sid` | member / admin or organiser (own) |
+| POST/DELETE | `/api/groups/:id/sessions/:sid/players[/:userId]` | admin / organiser (own game days) |
 | PUT | `/api/groups/:id/sessions/:sid/results/me` (or `/:userId` for admins) | member |
+| POST | `/api/groups/:id/sessions/:sid/transfers` `{fromUserId, amount}` | member (as buyer) / admin |
+| DELETE | `/api/groups/:id/sessions/:sid/transfers/:tid` | buyer, seller or admin |
 | GET/POST | `/api/solo` · PATCH/DELETE `/api/solo/:id` | me |
 
 ## Deploying to Railway (single service)

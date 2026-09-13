@@ -112,11 +112,35 @@ npm run dev
 | PUT | `/api/groups/:id/sessions/:sid/results/me` (or `/:userId` for admins) | member |
 | GET/POST | `/api/solo` · PATCH/DELETE `/api/solo/:id` | me |
 
-## Deploying
+## Deploying to Railway (single service)
 
-- **Database:** Neon, Supabase, Railway or Render Postgres. Set `DATABASE_URL`, run `npm run prisma:deploy -w server`.
-- **API:** Railway / Render / Fly. Set `PORT`, `CLIENT_ORIGIN` (your frontend URL), `DATABASE_URL`, `FIREBASE_SERVICE_ACCOUNT_JSON` (paste the JSON inline instead of a file), and the Cloudinary vars. Build with `npm run build -w server`, start with `npm start -w server`.
-- **Client:** Vercel / Netlify / Firebase Hosting. Set the `VITE_*` vars plus `VITE_API_URL=https://your-api`. Build with `npm run build -w client`, publish `client/dist`. Add your production domain to Firebase Auth → *Authorized domains*.
+In production the Express server also serves the built React app, so the whole thing is **one Railway service + one Postgres database**. No separate front-end host needed.
+
+1. **Push the project to GitHub** (make sure `server/prisma/migrations/` is committed — it is created by `npm run db:migrate`).
+2. **Railway → New Project → Deploy from GitHub repo.** Pick the repo. `railway.json` already tells Railway to build with `npm run build` and start with `npm start` (which runs `prisma migrate deploy` first, then the server).
+3. **Add Postgres:** in the project, *+ New → Database → PostgreSQL*. Then on your app service → *Variables → + Add Reference* → pick the Postgres `DATABASE_URL`.
+4. **Set the remaining variables** on the app service (Variables tab → *Raw Editor* is quickest):
+   ```
+   NODE_ENV=production
+   FIREBASE_SERVICE_ACCOUNT_JSON=<paste the whole contents of firebase-service-account.json on one line>
+   CLOUDINARY_CLOUD_NAME=...
+   CLOUDINARY_API_KEY=...
+   CLOUDINARY_API_SECRET=...
+   VITE_FIREBASE_API_KEY=...
+   VITE_FIREBASE_AUTH_DOMAIN=...
+   VITE_FIREBASE_PROJECT_ID=...
+   VITE_FIREBASE_APP_ID=...
+   ```
+   The `VITE_*` values are baked into the React bundle at build time, which is why they live on the same service. Leave `VITE_API_URL` and `CLIENT_ORIGIN` unset — same origin.
+5. **Generate a domain:** service → *Settings → Networking → Generate Domain*. You'll get something like `poker-ledger-production.up.railway.app`.
+6. **Authorise that domain in Firebase:** Firebase Console → Authentication → Settings → *Authorized domains* → add the Railway domain. Without this, sign-in fails with `auth/unauthorized-domain`.
+7. Redeploy once after setting variables (Deployments → ⋮ → Redeploy) so the client build picks up the `VITE_*` values.
+
+Every push to the connected branch redeploys automatically. Migrations run on each start via `prisma migrate deploy`, so schema changes just need `npm run db:migrate` locally and a commit of the new migration folder.
+
+### Splitting the front end out later (optional)
+
+If you ever want the React app on Vercel/Netlify instead: deploy `client/` there with the `VITE_*` vars plus `VITE_API_URL=https://<railway-domain>`, and set `CLIENT_ORIGIN=https://<vercel-domain>` on the Railway service so CORS allows it. Nothing else changes.
 
 ## Useful scripts
 

@@ -1,0 +1,16 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: poker-tracker-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: poker
+      POSTGRES_PASSWORD: poker
+      POSTGRES_DB: poker_tracker
+    ports:
+      - "5432:5432"
+    volumes:
+      - poker_pgdata:/var/lib/postgresql/data
+
+volumes:
+  poker_pgdata:

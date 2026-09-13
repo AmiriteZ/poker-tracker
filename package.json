@@ -1,0 +1,27 @@
+{
+  "name": "poker-tracker",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,client -c blue,green \"npm run dev -w server\" \"npm run dev -w client\"",
+    "build": "npm run build -w server && npm run build -w client",
+    "db:up": "docker compose up -d",
+    "db:migrate": "npm run prisma:migrate -w server",
+    "db:studio": "npm run prisma:studio -w server"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "esbuild@0.25.12": true,
+    "prisma@7.10.0": true,
+    "@prisma/engines@7.10.0": true,
+    "@firebase/util@1.12.1": true,
+    "protobufjs@7.6.6": true
+  }
+}

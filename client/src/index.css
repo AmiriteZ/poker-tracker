@@ -1,0 +1,95 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 40 20% 98%;
+    --foreground: 20 10% 6%;
+    --card: 0 0% 100%;
+    --card-foreground: 20 10% 6%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 20 10% 6%;
+    --primary: 213 67% 50%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 40 10% 93%;
+    --secondary-foreground: 20 10% 10%;
+    --muted: 40 10% 94%;
+    --muted-foreground: 30 3% 45%;
+    --accent: 40 10% 92%;
+    --accent-foreground: 20 10% 10%;
+    --destructive: 0 62% 52%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 40 8% 88%;
+    --input: 40 8% 86%;
+    --ring: 213 67% 50%;
+    --radius: 0.75rem;
+
+    /* Chart roles (validated dataviz palette) */
+    --win: 120 100% 19%;   /* #006300 */
+    --loss: 0 61% 52%;     /* #d03b3b */
+    --chart-line: #2a78d6;
+    --chart-grid: #e1e0d9;
+    --chart-axis: #c3c2b7;
+    --chart-muted: #898781;
+    --chart-win: #0ca30c;
+    --chart-loss: #d03b3b;
+    --chart-surface: #fcfcfb;
+  }
+
+  .dark {
+    --background: 60 4% 5%;
+    --foreground: 0 0% 98%;
+    --card: 60 2% 10%;
+    --card-foreground: 0 0% 98%;
+    --popover: 60 2% 10%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 213 76% 56%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 60 2% 15%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 60 2% 15%;
+    --muted-foreground: 50 8% 65%;
+    --accent: 60 2% 17%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62% 52%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 60 2% 18%;
+    --input: 60 2% 20%;
+    --ring: 213 76% 56%;
+
+    --win: 120 86% 34%;    /* #0ca30c */
+    --loss: 0 61% 52%;
+    --chart-line: #3987e5;
+    --chart-grid: #2c2c2a;
+    --chart-axis: #383835;
+    --chart-muted: #898781;
+    --chart-win: #0ca30c;
+    --chart-loss: #d03b3b;
+    --chart-surface: #1a1a19;
+  }
+
+  * {
+    @apply border-border;
+  }
+  html {
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv11", "ss01";
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer utilities {
+  .glass {
+    @apply bg-card/70 backdrop-blur-xl supports-[backdrop-filter]:bg-card/60;
+  }
+}

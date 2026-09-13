@@ -1,0 +1,65 @@
+import { Prisma } from "../generated/prisma/client.js";
+
+export const dec = (d: Prisma.Decimal | number | null | undefined) =>
+  d == null ? null : Number(d);
+
+export interface ResultPoint {
+  id: string;
+  date: string; // ISO
+  label: string; // session title / location / solo label
+  groupId: string | null;
+  groupName: string | null;
+  sessionId: string | null;
+  buyIn: number;
+  cashOut: number | null;
+  net: number | null; // null when the player hasn't submitted a cash-out
+}
+
+export interface Summary {
+  games: number;
+  submitted: number;
+  totalBuyIn: number;
+  totalCashOut: number;
+  net: number;
+  wins: number;
+  losses: number;
+  breakEven: number;
+  biggestWin: number;
+  biggestLoss: number;
+  avgNet: number;
+}
+
+export function summarize(points: ResultPoint[]): Summary {
+  const submitted = points.filter((p) => p.net != null);
+  const nets = submitted.map((p) => p.net as number);
+  const totalBuyIn = submitted.reduce((s, p) => s + p.buyIn, 0);
+  const totalCashOut = submitted.reduce((s, p) => s + (p.cashOut ?? 0), 0);
+  const net = totalCashOut - totalBuyIn;
+  return {
+    games: points.length,
+    submitted: submitted.length,
+    totalBuyIn: round(totalBuyIn),
+    totalCashOut: round(totalCashOut),
+    net: round(net),
+    wins: nets.filter((n) => n > 0).length,
+    losses: nets.filter((n) => n < 0).length,
+    breakEven: nets.filter((n) => n === 0).length,
+    biggestWin: round(nets.length ? Math.max(0, ...nets) : 0),
+    biggestLoss: round(nets.length ? Math.min(0, ...nets) : 0),
+    avgNet: round(nets.length ? net / nets.length : 0),
+  };
+}
+
+/** Sorted ascending by date with a running cumulative net for charting. */
+export function timeline(points: ResultPoint[]) {
+  const sorted = [...points]
+    .filter((p) => p.net != null)
+    .sort((a, b) => a.date.localeCompare(b.date));
+  let cumulative = 0;
+  return sorted.map((p) => {
+    cumulative += p.net as number;
+    return { ...p, cumulative: round(cumulative) };
+  });
+}
+
+export const round = (n: number) => Math.round(n * 100) / 100;

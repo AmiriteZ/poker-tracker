@@ -4,16 +4,19 @@ import type { StatsBlock, Summary } from "@/lib/types";
 import { cn, money, netClass } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { CumulativeChart, SessionBars, filterRange, type Range } from "@/components/charts";
+import { Reveal, staggerDelay } from "@/components/ui/reveal";
+import { CountUp } from "@/components/ui/count-up";
 
 export function StatTiles({ summary, currency = "€", compact = false, allTimeNet }: { summary: Summary; currency?: string; compact?: boolean; allTimeNet?: number }) {
   const Icon = summary.net > 0 ? TrendingUp : summary.net < 0 ? TrendingDown : Minus;
   const winRate = summary.submitted ? Math.round((summary.wins / summary.submitted) * 100) : 0;
-  const tiles: { label: string; value: string; cls?: string; icon?: React.ReactNode; sub?: string; mobileOnly?: boolean }[] = [
+  const tiles: { label: string; value: number | string; cls?: string; icon?: React.ReactNode; sub?: string; mobileOnly?: boolean; countUp?: boolean }[] = [
     {
       label: "Net profit",
-      value: money(summary.net, currency, { sign: true }),
+      value: summary.net,
       cls: netClass(summary.net),
       icon: <Icon className={cn("size-4", netClass(summary.net))} />,
+      countUp: true,
     },
     { label: "Sessions", value: String(summary.submitted), sub: summary.games > summary.submitted ? `${summary.games - summary.submitted} pending` : undefined },
     { label: "Win rate", value: `${winRate}%`, sub: `${summary.wins}W · ${summary.losses}L` },
@@ -23,20 +26,26 @@ export function StatTiles({ summary, currency = "€", compact = false, allTimeN
   ];
   // On phones the profile header hides its all-time tile; show it here beside "Worst night" instead.
   if (allTimeNet != null) {
-    tiles.push({ label: "All-time net", value: money(allTimeNet, currency, { sign: true }), cls: netClass(allTimeNet), mobileOnly: true });
+    tiles.push({ label: "All-time net", value: allTimeNet, cls: netClass(allTimeNet), mobileOnly: true, countUp: true });
   }
   const shown = compact ? tiles.slice(0, 4) : tiles;
   return (
     <div className={cn("grid gap-3", compact ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-2 md:grid-cols-3 lg:grid-cols-6")}>
-      {shown.map((t) => (
-        <div key={t.label} className={cn("rounded-xl border bg-card p-4", t.mobileOnly && "col-span-2 md:hidden")}>
+      {shown.map((t, i) => (
+        <Reveal
+          key={t.label}
+          delay={staggerDelay(i, 50, 250)}
+          className={cn("rounded-xl border bg-card p-4 shadow-card", t.mobileOnly && "col-span-2 md:hidden")}
+        >
           <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
             {t.label}
             {t.icon}
           </div>
-          <div className={cn("mt-1 text-2xl font-bold tracking-tight", t.cls)}>{t.value}</div>
+          <div className={cn("mt-1 text-2xl font-bold tracking-tight tabular", t.cls)}>
+            {t.countUp ? <CountUp value={t.value as number} format={(n) => money(n, currency, { sign: true })} /> : t.value}
+          </div>
           {t.sub ? <div className="mt-0.5 text-xs text-muted-foreground">{t.sub}</div> : null}
-        </div>
+        </Reveal>
       ))}
     </div>
   );
@@ -67,8 +76,8 @@ export function StatsPanel({ block, currency = "€", title = "Profit over time"
                 key={r.key}
                 onClick={() => setRange(r.key)}
                 className={cn(
-                  "rounded px-2.5 py-1 text-xs font-medium transition-colors",
-                  range === r.key ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground"
+                  "rounded px-2.5 py-1 text-xs font-medium transition-colors active:scale-95",
+                  range === r.key ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"
                 )}
               >
                 {r.label}

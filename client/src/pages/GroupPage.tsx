@@ -37,6 +37,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState, PageHeader } from "@/components/layout";
+import { Reveal, staggerDelay } from "@/components/ui/reveal";
 
 export function GroupPage() {
   const { groupId = "" } = useParams();
@@ -127,10 +128,11 @@ function SessionsTab({ group }: { group: GroupDetail }) {
 
   return (
     <div className="grid gap-3 md:grid-cols-2">
-      {list.map((s) => {
+      {list.map((s, i) => {
         const mine = s.results.find((r) => r.user.id === profile?.id);
         return (
-          <Link key={s.id} to={`/groups/${group.id}/sessions/${s.id}`} className="rounded-xl border bg-card p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
+          <Reveal key={s.id} delay={staggerDelay(i)}>
+          <Link to={`/groups/${group.id}/sessions/${s.id}`} className="block rounded-xl border bg-card p-4 shadow-card transition-all hover:-translate-y-1 hover:border-primary/30 hover:shadow-card-hover">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="font-semibold truncate">{s.title ?? format(new Date(s.playedAt), "EEEE d MMMM")}</div>
@@ -175,6 +177,7 @@ function SessionsTab({ group }: { group: GroupDetail }) {
               </div>
             ) : null}
           </Link>
+          </Reveal>
         );
       })}
     </div>
@@ -330,20 +333,22 @@ function PlayersTab({ group }: { group: GroupDetail }) {
       <CardContent className="p-0">
         <div className="divide-y">
           {rows.map((r, i) => (
-            <Link key={r.user.id} to={`/groups/${group.id}/players/${r.user.id}`} className="flex items-center gap-3 px-5 py-3 transition-colors hover:bg-accent/50">
-              <div className={cn("w-6 text-center text-sm font-semibold tabular", i === 0 && r.summary.net > 0 ? "text-[#eda100]" : "text-muted-foreground")}>{i + 1}</div>
-              <UserAvatar name={r.user.displayName} src={r.user.avatarUrl} className="size-9" />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5 truncate font-medium">
-                  {r.user.displayName}
-                  <RoleIcon role={r.role} />
+            <Reveal key={r.user.id} delay={staggerDelay(i, 35, 250)} as="span" className="block">
+              <Link to={`/groups/${group.id}/players/${r.user.id}`} className="flex items-center gap-3 px-5 py-3 transition-colors hover:bg-accent/50">
+                <div className={cn("w-6 text-center text-sm font-semibold tabular", i === 0 && r.summary.net > 0 ? "text-primary" : "text-muted-foreground")}>{i + 1}</div>
+                <UserAvatar name={r.user.displayName} src={r.user.avatarUrl} className="size-9" ring={r.role === "ADMIN" ? "admin" : r.role === "ORGANISER" ? "organiser" : undefined} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5 truncate font-medium">
+                    {r.user.displayName}
+                    <RoleIcon role={r.role} />
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {r.summary.submitted} session{r.summary.submitted === 1 ? "" : "s"} · {r.summary.wins}W {r.summary.losses}L
+                  </div>
                 </div>
-                <div className="text-xs text-muted-foreground">
-                  {r.summary.submitted} session{r.summary.submitted === 1 ? "" : "s"} · {r.summary.wins}W {r.summary.losses}L
-                </div>
-              </div>
-              <div className={cn("tabular text-right font-semibold", netClass(r.summary.net))}>{money(r.summary.net, group.currency, { sign: true })}</div>
-            </Link>
+                <div className={cn("tabular text-right font-semibold", netClass(r.summary.net))}>{money(r.summary.net, group.currency, { sign: true })}</div>
+              </Link>
+            </Reveal>
           ))}
         </div>
       </CardContent>
@@ -498,7 +503,7 @@ function ManageTab({ group }: { group: GroupDetail }) {
 }
 
 function RoleIcon({ role }: { role: Role }) {
-  if (role === "ADMIN") return <Crown className="size-3.5 shrink-0 text-muted-foreground" aria-label="Admin" />;
+  if (role === "ADMIN") return <Crown className="size-3.5 shrink-0 text-primary" aria-label="Admin" />;
   if (role === "ORGANISER") return <ClipboardList className="size-3.5 shrink-0 text-muted-foreground" aria-label="Organiser" />;
   return null;
 }

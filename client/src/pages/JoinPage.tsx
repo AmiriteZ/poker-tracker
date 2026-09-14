@@ -6,6 +6,7 @@ import { api, ApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Reveal } from "@/components/ui/reveal";
 
 /** Landing page for invite links: /join/:code */
 export function JoinPage() {
@@ -31,11 +32,11 @@ export function JoinPage() {
   });
 
   return (
-    <div className="mx-auto max-w-md pt-10">
+    <Reveal as="div" className="mx-auto max-w-md pt-10">
       <Card>
         <CardHeader className="items-center text-center">
-          <div className="mb-2 rounded-full bg-secondary p-3">
-            <Users className="size-6" />
+          <div className="mb-2 rounded-full bg-primary/10 p-3">
+            <Users className="size-6 text-primary" />
           </div>
           {preview.isLoading ? (
             <Skeleton className="h-6 w-40" />
@@ -66,6 +67,6 @@ export function JoinPage() {
           <p className="mt-2 text-center text-xs text-muted-foreground">An admin has to confirm you before you can see the group.</p>
         </CardContent>
       </Card>
-    </div>
+    </Reveal>
   );
 }

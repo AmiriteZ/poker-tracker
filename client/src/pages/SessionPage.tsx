@@ -18,6 +18,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PageHeader } from "@/components/layout";
+import { Reveal, staggerDelay } from "@/components/ui/reveal";
+import { CountUp } from "@/components/ui/count-up";
 
 export function SessionPage() {
   const { groupId = "", sessionId = "" } = useParams();
@@ -92,7 +94,7 @@ export function SessionPage() {
 
       {/* Pot strip */}
       <div className="mb-4 grid grid-cols-3 gap-2 sm:gap-3">
-        <StatChip label="Total pot" value={money(s.pot, cur)} icon={<Coins className="size-4" />} />
+        <StatChip label="Total pot" value={<CountUp value={s.pot} format={(n) => money(n, cur)} />} icon={<Coins className="size-4" />} />
         <StatChip label="Players" value={String(s.playerCount)} />
         <StatChip label="Results in" value={`${s.submittedCount}/${s.playerCount}`} />
       </div>
@@ -165,7 +167,7 @@ export function SessionPage() {
           <CardContent className="p-0">
             <div className="divide-y">
               {ranked.map((r, i) => (
-                <div key={r.id} className="flex items-center gap-2 px-4 py-3 sm:gap-3 sm:px-5">
+                <Reveal key={r.id} delay={staggerDelay(i, 35, 250)} className="flex items-center gap-2 px-4 py-3 sm:gap-3 sm:px-5">
                   <div className="w-5 text-center text-sm tabular text-muted-foreground">{r.submitted ? i + 1 : "–"}</div>
                   <Link to={`/groups/${groupId}/players/${r.user.id}`} className="flex min-w-0 flex-1 items-center gap-2 hover:underline sm:gap-3">
                     <UserAvatar name={r.user.displayName} src={r.user.avatarUrl} className="size-9" />
@@ -196,7 +198,7 @@ export function SessionPage() {
                       </Button>
                     </div>
                   ) : null}
-                </div>
+                </Reveal>
               ))}
               {s.results.length === 0 ? <div className="px-5 py-8 text-center text-sm text-muted-foreground">Nobody seated yet.</div> : null}
             </div>
@@ -261,7 +263,7 @@ export function SessionPage() {
   );
 }
 
-function StatChip({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
+function StatChip({ label, value, icon }: { label: string; value: React.ReactNode; icon?: React.ReactNode }) {
   return (
     <div className="rounded-xl border bg-card px-3 py-2.5 sm:px-4 sm:py-3">
       <div className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">

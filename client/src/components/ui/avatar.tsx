@@ -30,10 +30,28 @@ const AvatarFallback = React.forwardRef<
 ));
 AvatarFallback.displayName = AvatarPrimitive.Fallback.displayName;
 
-/** Convenience wrapper: image with initials fallback. */
-export function UserAvatar({ name, src, className, textClassName }: { name: string; src?: string | null; className?: string; textClassName?: string }) {
+/** Convenience wrapper: image with initials fallback. Pass `ring="admin"` to add a brass ring for standout roles. */
+export function UserAvatar({
+  name,
+  src,
+  className,
+  textClassName,
+  ring,
+}: {
+  name: string;
+  src?: string | null;
+  className?: string;
+  textClassName?: string;
+  ring?: "admin" | "organiser";
+}) {
   return (
-    <Avatar className={className}>
+    <Avatar
+      className={cn(
+        ring === "admin" && "ring-2 ring-primary/60 ring-offset-2 ring-offset-background",
+        ring === "organiser" && "ring-2 ring-muted-foreground/30 ring-offset-2 ring-offset-background",
+        className
+      )}
+    >
       {src ? <AvatarImage src={src} alt={name} /> : null}
       <AvatarFallback className={textClassName}>{initials(name) || "?"}</AvatarFallback>
     </Avatar>

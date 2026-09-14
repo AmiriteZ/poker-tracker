@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { UserAvatar } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatsPanel } from "@/components/stats";
+import { Reveal, staggerDelay } from "@/components/ui/reveal";
 
 /** A player's profile inside one group. */
 export function PlayerPage() {
@@ -32,7 +33,7 @@ export function PlayerPage() {
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
             {p.user.displayName}
-            {p.role === "ADMIN" ? <Crown className="size-5 text-muted-foreground" /> : p.role === "ORGANISER" ? <ClipboardList className="size-5 text-muted-foreground" /> : null}
+            {p.role === "ADMIN" ? <Crown className="size-5 text-primary" /> : p.role === "ORGANISER" ? <ClipboardList className="size-5 text-muted-foreground" /> : null}
           </h1>
           <p className="text-sm text-muted-foreground">Results in {g.name}</p>
         </div>
@@ -49,15 +50,17 @@ export function PlayerPage() {
             <div className="px-6 pb-6 text-sm text-muted-foreground">No submitted results yet.</div>
           ) : (
             <div className="divide-y">
-              {recent.map((t) => (
-                <Link key={t.id} to={`/groups/${groupId}/sessions/${t.sessionId}`} className="flex items-center gap-3 px-5 py-3 text-sm hover:bg-accent/50">
-                  <div className="w-24 shrink-0 text-muted-foreground">{format(new Date(t.date), "d MMM yyyy")}</div>
-                  <div className="min-w-0 flex-1 truncate">{t.label}</div>
-                  <div className="hidden tabular text-xs text-muted-foreground sm:block">
-                    {money(t.buyIn, g.currency)} → {money(t.cashOut, g.currency)}
-                  </div>
-                  <div className={cn("tabular font-semibold", netClass(t.net))}>{money(t.net, g.currency, { sign: true })}</div>
-                </Link>
+              {recent.map((t, i) => (
+                <Reveal key={t.id} delay={staggerDelay(i, 35, 250)}>
+                  <Link to={`/groups/${groupId}/sessions/${t.sessionId}`} className="flex items-center gap-3 px-5 py-3 text-sm hover:bg-accent/50">
+                    <div className="w-24 shrink-0 text-muted-foreground">{format(new Date(t.date), "d MMM yyyy")}</div>
+                    <div className="min-w-0 flex-1 truncate">{t.label}</div>
+                    <div className="hidden tabular text-xs text-muted-foreground sm:block">
+                      {money(t.buyIn, g.currency)} → {money(t.cashOut, g.currency)}
+                    </div>
+                    <div className={cn("tabular font-semibold", netClass(t.net))}>{money(t.net, g.currency, { sign: true })}</div>
+                  </Link>
+                </Reveal>
               ))}
             </div>
           )}

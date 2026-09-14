@@ -15,6 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { EmptyState, PageHeader } from "@/components/layout";
 import { StatsPanel } from "@/components/stats";
+import { Reveal, staggerDelay } from "@/components/ui/reveal";
 
 export function SoloPage() {
   const qc = useQueryClient();
@@ -58,8 +59,8 @@ export function SoloPage() {
             </CardHeader>
             <CardContent className="p-0">
               <div className="divide-y">
-                {solo.data.games.map((g) => (
-                  <div key={g.id} className="flex items-center gap-3 px-5 py-3 text-sm">
+                {solo.data.games.map((g, i) => (
+                  <Reveal key={g.id} delay={staggerDelay(i, 35, 250)} className="flex items-center gap-3 px-5 py-3 text-sm">
                     <div className="w-24 shrink-0 text-muted-foreground">{format(new Date(g.playedAt), "d MMM yyyy")}</div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1 truncate">
@@ -81,7 +82,7 @@ export function SoloPage() {
                     <Button size="icon" variant="ghost" aria-label="Delete" onClick={() => { if (confirm("Delete this game?")) del.mutate(g.id); }}>
                       <Trash2 className="size-4" />
                     </Button>
-                  </div>
+                  </Reveal>
                 ))}
               </div>
             </CardContent>

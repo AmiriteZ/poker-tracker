@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ThemeToggle } from "@/components/layout";
+import { Reveal } from "@/components/ui/reveal";
 
 type Mode = "signin" | "signup";
 
@@ -92,18 +93,28 @@ export function AuthPage() {
 
   return (
     <div className="min-h-dvh grid lg:grid-cols-2">
-      <div className="hidden lg:flex flex-col justify-between p-10 bg-gradient-to-br from-[#0d366b] via-[#1c5cab] to-[#2a78d6] text-white">
-        <div className="flex items-center gap-2 font-bold text-lg">
+      <div className="relative hidden lg:flex flex-col justify-between overflow-hidden p-10 bg-gradient-to-br from-[#151110] via-[#2c1f13] to-[#7a5018] text-white">
+        <div
+          className="pointer-events-none absolute -right-24 -top-24 size-[28rem] rounded-full opacity-40 blur-3xl"
+          style={{ background: "radial-gradient(closest-side, rgba(230,168,64,0.55), transparent)" }}
+          aria-hidden
+        />
+        <div
+          className="pointer-events-none absolute -bottom-32 -left-16 size-96 rounded-full opacity-25 blur-3xl"
+          style={{ background: "radial-gradient(closest-side, rgba(230,168,64,0.4), transparent)" }}
+          aria-hidden
+        />
+        <div className="relative flex items-center gap-2 font-bold text-lg">
           <img src="/chip.svg" alt="" className="size-7" />
           Poker Ledger
         </div>
-        <div>
+        <div className="relative">
           <h2 className="text-4xl font-bold leading-tight">Every buy-in.<br />Every cash-out.<br />Settled.</h2>
-          <p className="mt-4 max-w-md text-white/80">
+          <p className="mt-4 max-w-md text-white/75">
             Track your home game with friends — who's up, who's down, and how the night went. One group per crew, one ledger for life.
           </p>
         </div>
-        <p className="text-xs text-white/60">Built for friendly stakes. Play responsibly.</p>
+        <p className="relative text-xs text-white/50">Built for friendly stakes. Play responsibly.</p>
       </div>
 
       <div className="flex flex-col p-6 sm:p-10">
@@ -114,7 +125,7 @@ export function AuthPage() {
           </div>
           <ThemeToggle />
         </div>
-        <div className="m-auto w-full max-w-sm">
+        <Reveal className="m-auto w-full max-w-sm">
           <h1 className="text-2xl font-bold tracking-tight">{mode === "signin" ? "Welcome back" : "Create your account"}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {mode === "signin" ? "Sign in to see your groups and results." : "It only takes a moment."}
@@ -177,7 +188,7 @@ export function AuthPage() {
               {mode === "signin" ? "Create an account" : "Sign in"}
             </button>
           </p>
-        </div>
+        </Reveal>
       </div>
     </div>
   );

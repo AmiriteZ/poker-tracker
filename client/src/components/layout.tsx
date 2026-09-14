@@ -55,7 +55,7 @@ export function AppLayout() {
                 className={({ isActive }) =>
                   cn(
                     "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-                    isActive ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground"
+                    isActive ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"
                   )
                 }
               >
@@ -128,7 +128,7 @@ export function PageHeader({ title, subtitle, actions, back }: { title: React.Re
             ← Back
           </Link>
         ) : null}
-        <h1 className="text-2xl font-bold tracking-tight truncate">{title}</h1>
+        <h1 className="text-2xl font-extrabold tracking-tight truncate sm:text-3xl">{title}</h1>
         {subtitle ? <p className="text-sm text-muted-foreground">{subtitle}</p> : null}
       </div>
       {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
@@ -139,8 +139,8 @@ export function PageHeader({ title, subtitle, actions, back }: { title: React.Re
 export function EmptyState({ icon: Icon, title, body, action }: { icon: React.ComponentType<{ className?: string }>; title: string; body?: string; action?: React.ReactNode }) {
   return (
     <div className="flex flex-col items-center justify-center rounded-xl border border-dashed px-6 py-14 text-center">
-      <div className="mb-3 rounded-full bg-secondary p-3">
-        <Icon className="size-6 text-muted-foreground" />
+      <div className="mb-3 rounded-full bg-primary/10 p-3">
+        <Icon className="size-6 text-primary" />
       </div>
       <div className="font-semibold">{title}</div>
       {body ? <p className="mt-1 max-w-sm text-sm text-muted-foreground">{body}</p> : null}

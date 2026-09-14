@@ -7,26 +7,31 @@
   :root {
     --background: 40 20% 98%;
     --foreground: 20 10% 6%;
-    --card: 0 0% 100%;
+    --card: 40 15% 99%;
     --card-foreground: 20 10% 6%;
     --popover: 0 0% 100%;
     --popover-foreground: 20 10% 6%;
-    --primary: 213 67% 50%;
-    --primary-foreground: 0 0% 100%;
+    /* Brass/gold brand accent — deliberately distinct from the win/loss greens & reds below. */
+    --primary: 36 78% 47%;
+    --primary-foreground: 22 45% 11%;
     --secondary: 40 10% 93%;
     --secondary-foreground: 20 10% 10%;
     --muted: 40 10% 94%;
     --muted-foreground: 30 3% 45%;
-    --accent: 40 10% 92%;
+    --accent: 38 30% 91%;
     --accent-foreground: 20 10% 10%;
     --destructive: 0 62% 52%;
     --destructive-foreground: 0 0% 100%;
-    --border: 40 8% 88%;
+    --border: 40 10% 87%;
     --input: 40 8% 86%;
-    --ring: 213 67% 50%;
+    --ring: 36 78% 47%;
     --radius: 0.75rem;
 
-    /* Chart roles (validated dataviz palette) */
+    --shadow-color: 30 20% 15%;
+    --shadow-card: 0 1px 2px hsl(var(--shadow-color) / 0.05), 0 8px 20px -10px hsl(var(--shadow-color) / 0.18);
+    --shadow-card-hover: 0 2px 5px hsl(var(--shadow-color) / 0.06), 0 18px 34px -12px hsl(var(--shadow-color) / 0.24);
+
+    /* Chart roles (validated dataviz palette) — left untouched by the brand refresh */
     --win: 120 100% 19%;   /* #006300 */
     --loss: 0 61% 52%;     /* #d03b3b */
     --chart-line: #2a78d6;
@@ -41,23 +46,27 @@
   .dark {
     --background: 60 4% 5%;
     --foreground: 0 0% 98%;
-    --card: 60 2% 10%;
+    --card: 45 8% 9%;
     --card-foreground: 0 0% 98%;
-    --popover: 60 2% 10%;
+    --popover: 45 8% 10%;
     --popover-foreground: 0 0% 98%;
-    --primary: 213 76% 56%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 60 2% 15%;
+    --primary: 40 90% 58%;
+    --primary-foreground: 22 45% 9%;
+    --secondary: 50 5% 15%;
     --secondary-foreground: 0 0% 98%;
-    --muted: 60 2% 15%;
+    --muted: 50 5% 15%;
     --muted-foreground: 50 8% 65%;
-    --accent: 60 2% 17%;
+    --accent: 42 12% 17%;
     --accent-foreground: 0 0% 98%;
     --destructive: 0 62% 52%;
     --destructive-foreground: 0 0% 100%;
-    --border: 60 2% 18%;
-    --input: 60 2% 20%;
-    --ring: 213 76% 56%;
+    --border: 45 6% 18%;
+    --input: 45 6% 20%;
+    --ring: 40 90% 58%;
+
+    --shadow-color: 0 0% 0%;
+    --shadow-card: 0 1px 2px hsl(var(--shadow-color) / 0.3), 0 10px 24px -10px hsl(var(--shadow-color) / 0.55);
+    --shadow-card-hover: 0 2px 6px hsl(var(--shadow-color) / 0.35), 0 20px 40px -12px hsl(var(--shadow-color) / 0.65);
 
     --win: 120 86% 34%;    /* #0ca30c */
     --loss: 0 61% 52%;
@@ -91,5 +100,75 @@
 @layer utilities {
   .glass {
     @apply bg-card/70 backdrop-blur-xl supports-[backdrop-filter]:bg-card/60;
+  }
+
+  /* Layered "lifted" shadow used on interactive/elevated surfaces instead of flat shadow-sm. */
+  .shadow-card {
+    box-shadow: var(--shadow-card);
+  }
+  .shadow-card-hover {
+    box-shadow: var(--shadow-card-hover);
+  }
+
+  /* Scroll-triggered reveal (see components/ui/reveal.tsx). Pure opacity+transform, GPU-cheap. */
+  .reveal {
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.5s ease-out, transform 0.5s ease-out;
+    transition-delay: var(--reveal-delay, 0ms);
+    will-change: opacity, transform;
+  }
+  .reveal-visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* Subtle shimmer sweep over skeletons instead of a flat pulse. */
+  .skeleton-shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+  .skeleton-shimmer::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, hsl(var(--foreground) / 0.06), transparent);
+    animation: shimmer 1.8s ease-in-out infinite;
+  }
+
+  .press {
+    transition: transform 0.1s ease-out;
+  }
+  .press:active {
+    transform: scale(0.97);
+  }
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Respect the user's motion preference: kill non-essential motion, keep instant state changes. */
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    transition: none;
+    opacity: 1;
+    transform: none;
+  }
+  .skeleton-shimmer::after {
+    animation: none;
+    display: none;
+  }
+  .press:active {
+    transform: none;
+  }
+  * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
   }
 }

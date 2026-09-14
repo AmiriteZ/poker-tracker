@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { EmptyState, PageHeader } from "@/components/layout";
+import { Reveal, staggerDelay } from "@/components/ui/reveal";
 
 export function GroupsPage() {
   const { data, isLoading } = useQuery({ queryKey: ["groups"], queryFn: () => api.get<GroupListItem[]>("/groups") });
@@ -52,39 +53,40 @@ export function GroupsPage() {
       ) : (
         <div className="space-y-8">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {approved.map((g) => (
-              <Link
-                key={g.id}
-                to={`/groups/${g.id}`}
-                className="group rounded-xl border bg-card p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="truncate text-lg font-semibold">{g.name}</div>
-                    {g.description ? <div className="truncate text-sm text-muted-foreground">{g.description}</div> : null}
+            {approved.map((g, i) => (
+              <Reveal key={g.id} delay={staggerDelay(i)}>
+                <Link
+                  to={`/groups/${g.id}`}
+                  className="group block rounded-xl border bg-card p-5 shadow-card transition-all hover:-translate-y-1 hover:border-primary/30 hover:shadow-card-hover"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="truncate text-lg font-semibold">{g.name}</div>
+                      {g.description ? <div className="truncate text-sm text-muted-foreground">{g.description}</div> : null}
+                    </div>
+                    {g.role === "ADMIN" ? (
+                      <Badge className="gap-1 shrink-0 border-transparent bg-primary/15 text-primary">
+                        <Crown className="size-3" /> Admin
+                      </Badge>
+                    ) : g.role === "ORGANISER" ? (
+                      <Badge variant="secondary" className="shrink-0">Organiser</Badge>
+                    ) : null}
                   </div>
-                  {g.role === "ADMIN" ? (
-                    <Badge variant="secondary" className="gap-1 shrink-0">
-                      <Crown className="size-3" /> Admin
-                    </Badge>
-                  ) : g.role === "ORGANISER" ? (
-                    <Badge variant="secondary" className="shrink-0">Organiser</Badge>
-                  ) : null}
-                </div>
-                <div className="mt-5 flex items-center gap-4 text-sm text-muted-foreground">
-                  <span className="inline-flex items-center gap-1">
-                    <Users className="size-4" /> {g.memberCount}
-                  </span>
-                  <span className="inline-flex items-center gap-1">
-                    <CalendarDays className="size-4" /> {g.sessionCount}
-                  </span>
-                  {g.pendingRequests > 0 ? (
-                    <Badge className="ml-auto" variant="default">
-                      {g.pendingRequests} request{g.pendingRequests > 1 ? "s" : ""}
-                    </Badge>
-                  ) : null}
-                </div>
-              </Link>
+                  <div className="mt-5 flex items-center gap-4 text-sm text-muted-foreground">
+                    <span className="inline-flex items-center gap-1">
+                      <Users className="size-4" /> {g.memberCount}
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <CalendarDays className="size-4" /> {g.sessionCount}
+                    </span>
+                    {g.pendingRequests > 0 ? (
+                      <Badge className="ml-auto" variant="default">
+                        {g.pendingRequests} request{g.pendingRequests > 1 ? "s" : ""}
+                      </Badge>
+                    ) : null}
+                  </div>
+                </Link>
+              </Reveal>
             ))}
           </div>
 

@@ -16,6 +16,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { StatsPanel } from "@/components/stats";
+import { Reveal, staggerDelay } from "@/components/ui/reveal";
+import { CountUp } from "@/components/ui/count-up";
 
 interface SignResponse {
   timestamp: number;
@@ -91,9 +93,11 @@ export function ProfilePage() {
         </div>
         {/* On phones this lives in the stat grid instead (see StatTiles `extra`) */}
         {stats.data ? (
-          <div className="hidden rounded-xl border bg-card px-5 py-3 text-right md:block">
+          <div className="hidden rounded-xl border bg-card px-5 py-3 text-right shadow-card md:block">
             <div className="text-xs text-muted-foreground">All-time net</div>
-            <div className={cn("text-2xl font-bold tabular", netClass(stats.data.all.summary.net))}>{money(stats.data.all.summary.net, "€", { sign: true })}</div>
+            <div className={cn("text-2xl font-bold tabular", netClass(stats.data.all.summary.net))}>
+              <CountUp value={stats.data.all.summary.net} format={(n) => money(n, "€", { sign: true })} />
+            </div>
           </div>
         ) : null}
       </div>
@@ -127,16 +131,18 @@ export function ProfilePage() {
                 </CardHeader>
                 <CardContent className="p-0">
                   <div className="divide-y">
-                    {stats.data.byGroup.map((g) => (
-                      <Link key={g.groupId} to={`/groups/${g.groupId}/players/${profile.id}`} className="flex items-center gap-3 px-5 py-3 text-sm hover:bg-accent/50">
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate font-medium">{g.groupName}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {g.summary.submitted} sessions · {g.summary.wins}W {g.summary.losses}L
+                    {stats.data.byGroup.map((g, i) => (
+                      <Reveal key={g.groupId} delay={staggerDelay(i, 35, 250)}>
+                        <Link to={`/groups/${g.groupId}/players/${profile.id}`} className="flex items-center gap-3 px-5 py-3 text-sm hover:bg-accent/50">
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate font-medium">{g.groupName}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {g.summary.submitted} sessions · {g.summary.wins}W {g.summary.losses}L
+                            </div>
                           </div>
-                        </div>
-                        <div className={cn("tabular font-semibold", netClass(g.summary.net))}>{money(g.summary.net, "€", { sign: true })}</div>
-                      </Link>
+                          <div className={cn("tabular font-semibold", netClass(g.summary.net))}>{money(g.summary.net, "€", { sign: true })}</div>
+                        </Link>
+                      </Reveal>
                     ))}
                   </div>
                 </CardContent>

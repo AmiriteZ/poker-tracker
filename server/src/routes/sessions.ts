@@ -4,9 +4,12 @@ import { prisma } from "../lib/prisma.js";
 import { badRequest, forbidden, notFound, wrap } from "../lib/errors.js";
 import { requireMember, requireOrganiser, requireSessionManager } from "../lib/access.js";
 import { dec, effective, round } from "../lib/stats.js";
+import { highlightsRouter } from "./highlights.js";
 
 /** Mounted at /groups/:groupId/sessions */
 export const sessionsRouter = Router({ mergeParams: true });
+
+sessionsRouter.use("/:sessionId/highlights", highlightsRouter);
 
 const userSelect = { id: true, displayName: true, avatarUrl: true } as const;
 

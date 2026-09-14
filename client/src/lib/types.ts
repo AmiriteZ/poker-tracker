@@ -153,3 +153,24 @@ export interface SoloGame {
 export interface SoloResponse extends StatsBlock {
   games: SoloGame[];
 }
+
+export type RevealStage = "START" | "FLOP" | "TURN" | "RIVER";
+
+export interface HighlightPlayerRow {
+  id: string;
+  user: PublicUser;
+  revealedAt: RevealStage;
+  hole1: { rank: string; suit: string } | null;
+  hole2: { rank: string; suit: string } | null;
+}
+
+export interface Highlight {
+  id: string;
+  sessionId: string;
+  title: string | null;
+  createdBy: PublicUser;
+  createdAt: string;
+  /** Always exactly 5, positions 0-2 flop, 3 turn, 4 river. */
+  cards: { rank: string; suit: string }[];
+  players: HighlightPlayerRow[];
+}

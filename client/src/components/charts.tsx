@@ -1,11 +1,11 @@
 import { useMemo } from "react";
 import {
-  Area,
-  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
   Cell,
+  Line,
+  LineChart,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -69,7 +69,9 @@ function ChartTooltip({ active, payload, currency }: { active?: boolean; payload
   );
 }
 
-/** Cumulative profit over time — single series, so no legend. */
+/** Cumulative profit over time — single series, so no legend. No area fill: a shaded
+ * band above/below the line reads as "good zone / bad zone" and looks wrong once a
+ * player's running total goes negative, so this is a plain line against the zero axis. */
 export function CumulativeChart({ points, currency = "€", height = 240 }: { points: TimelinePoint[]; currency?: string; height?: number }) {
   const c = useChartColors();
   if (points.length === 0) return <EmptyChart height={height} />;
@@ -77,13 +79,7 @@ export function CumulativeChart({ points, currency = "€", height = 240 }: { po
   return (
     <div style={{ height }} className="w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
-          <defs>
-            <linearGradient id="cumFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={c.line} stopOpacity={0.25} />
-              <stop offset="100%" stopColor={c.line} stopOpacity={0} />
-            </linearGradient>
-          </defs>
+        <LineChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
           <CartesianGrid stroke={c.grid} vertical={false} strokeDasharray="0" />
           <XAxis
             dataKey="t"
@@ -105,17 +101,16 @@ export function CumulativeChart({ points, currency = "€", height = 240 }: { po
           />
           <ReferenceLine y={0} stroke={c.axis} />
           <Tooltip content={<ChartTooltip currency={currency} />} cursor={{ stroke: c.axis, strokeDasharray: "3 3" }} />
-          <Area
+          <Line
             type="monotone"
             dataKey="cumulative"
             stroke={c.line}
             strokeWidth={2}
-            fill="url(#cumFill)"
             dot={data.length <= 40 ? { r: 3, fill: c.line, strokeWidth: 0 } : false}
             activeDot={{ r: 5, strokeWidth: 2, stroke: "var(--chart-surface)" }}
             isAnimationActive={false}
           />
-        </AreaChart>
+        </LineChart>
       </ResponsiveContainer>
     </div>
   );

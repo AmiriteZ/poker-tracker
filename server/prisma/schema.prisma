@@ -21,6 +21,14 @@ enum MembershipStatus {
   REJECTED
 }
 
+/// When a player's hole cards flip face-up during a highlight's playback animation.
+enum RevealStage {
+  START
+  FLOP
+  TURN
+  RIVER
+}
+
 model User {
   id          String   @id @default(cuid())
   firebaseUid String   @unique
@@ -37,6 +45,8 @@ model User {
   soloGames       SoloGame[]
   chipsSold       ChipTransfer[] @relation("ChipSeller")
   chipsBought     ChipTransfer[] @relation("ChipBuyer")
+  highlightsCreated    Highlight[]        @relation("HighlightCreatedBy")
+  highlightAppearances HighlightPlayer[]
 }
 
 model Group {
@@ -83,8 +93,9 @@ model Session {
 
   group     Group           @relation(fields: [groupId], references: [id], onDelete: Cascade)
   createdBy User            @relation("SessionCreator", fields: [createdById], references: [id])
-  results   SessionResult[]
-  transfers ChipTransfer[]
+  results    SessionResult[]
+  transfers  ChipTransfer[]
+  highlights Highlight[]
 
   @@index([groupId, playedAt])
 }
@@ -130,6 +141,57 @@ model ChipTransfer {
   to      User    @relation("ChipBuyer", fields: [toUserId], references: [id], onDelete: Cascade)
 
   @@index([sessionId])
+}
+
+/// A curated replay of one hand played during a game day: the 5 community cards
+/// (positions 0-2 flop, 3 turn, 4 river) plus which players were involved and when
+/// their hole cards flip face-up during the playback animation.
+model Highlight {
+  id          String   @id @default(cuid())
+  sessionId   String
+  title       String?
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  session   Session           @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  createdBy User              @relation("HighlightCreatedBy", fields: [createdById], references: [id])
+  cards     HighlightCard[]
+  players   HighlightPlayer[]
+
+  @@index([sessionId])
+}
+
+/// One of the 5 fixed community-card slots on a highlight (0-2 flop, 3 turn, 4 river).
+model HighlightCard {
+  id          String    @id @default(cuid())
+  highlightId String
+  position    Int
+  rank        String // "2".."10" | "J" | "Q" | "K" | "A"
+  suit        String // "club" | "diamond" | "heart" | "spade"
+
+  highlight Highlight @relation(fields: [highlightId], references: [id], onDelete: Cascade)
+
+  @@unique([highlightId, position])
+}
+
+/// A player featured in a highlight, with their hole cards (filled in after they're
+/// added) and the stage at which their cards flip face-up in the playback animation.
+model HighlightPlayer {
+  id          String      @id @default(cuid())
+  highlightId String
+  userId      String
+  revealedAt  RevealStage @default(START)
+  holeRank1   String?
+  holeSuit1   String?
+  holeRank2   String?
+  holeSuit2   String?
+  seatOrder   Int         @default(0)
+
+  highlight Highlight @relation(fields: [highlightId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([highlightId, userId])
 }
 
 /// Games played outside any group (home games with strangers, casino, online...).

@@ -1,9 +1,9 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import { AlertTriangle, ArrowRightLeft, Check, Coins, MapPin, Pencil, Plus, Trash2, UserMinus, X } from "lucide-react";
+import { AlertTriangle, ArrowRightLeft, Check, Clapperboard, Coins, ListChecks, MapPin, Pencil, Plus, Trash2, UserMinus, X } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import type { ChipTransfer, GroupDetail, Session, SessionResultRow } from "@/lib/types";
@@ -17,15 +17,19 @@ import { UserAvatar } from "@/components/ui/avatar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/layout";
 import { Reveal, staggerDelay } from "@/components/ui/reveal";
 import { CountUp } from "@/components/ui/count-up";
+import { HighlightsTab } from "@/components/highlights/highlights-tab";
 
 export function SessionPage() {
   const { groupId = "", sessionId = "" } = useParams();
   const { profile } = useAuth();
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
+  const tab = params.get("tab") ?? "results";
 
   const group = useQuery({ queryKey: ["group", groupId], queryFn: () => api.get<GroupDetail>(`/groups/${groupId}`) });
   const session = useQuery({ queryKey: ["session", groupId, sessionId], queryFn: () => api.get<Session>(`/groups/${groupId}/sessions/${sessionId}`) });
@@ -92,6 +96,17 @@ export function SessionPage() {
         }
       />
 
+      <Tabs value={tab} onValueChange={(v) => setParams({ tab: v })}>
+        <TabsList>
+          <TabsTrigger value="results">
+            <ListChecks className="size-4" /> Results
+          </TabsTrigger>
+          <TabsTrigger value="highlights">
+            <Clapperboard className="size-4" /> Highlights
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="results">
       {/* Pot strip */}
       <div className="mb-4 grid grid-cols-3 gap-2 sm:gap-3">
         <StatChip label="Total pot" value={<CountUp value={s.pot} format={(n) => money(n, cur)} />} icon={<Coins className="size-4" />} />
@@ -259,6 +274,12 @@ export function SessionPage() {
           ) : null}
         </div>
       </div>
+        </TabsContent>
+
+        <TabsContent value="highlights">
+          <HighlightsTab groupId={groupId} sessionId={sessionId} seatedPlayers={s.results.map((r) => r.user)} canManage={canManage} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

@@ -17,7 +17,8 @@ poker-tracker/
 - **Game days** (admin or organiser) — pick a date, location (free text) and seat the players who showed up. Each card shows the total pot.
 - **Results** (players) — each player enters their own bank buy-in (including rebuys) and cash-out. Net = cash-out − buy-in. The session page shows the pot, the night's top winner / biggest loser, and warns when the table doesn't balance.
 - **Chip purchases between players** — bought chips off a friend mid-game? Log it (amount + who from) on your result. It raises your buy-in and their cash-out by that amount; the pot is unchanged and the balance check still works.
-- **Player profiles** — stats + cumulative profit chart + per-session bars, filterable by 30d / 90d / 1y / all.
+- **Player profiles** — stats + cumulative profit chart (line, not filled) + per-session bars, filterable by 30d / 90d / 1y / all.
+- **Highlights** (admin, or organiser on game days they created) — capture a memorable hand from a game day: the five community cards, which seated players were in it, their hole cards, and when each player's hand should be revealed (start / flop / turn / river). Anyone in the group can then watch it back as a flip animation — flop (all three together), turn, river, with each player's hole cards flipping in at their chosen moment.
 - **Leaderboard** per group.
 - **Your profile** — all-time totals across every group and solo games, per-group breakdown, Cloudinary avatar upload, display-name edit.
 - **Solo games** tab for games outside any group (with a reminder not to double-log group sessions).
@@ -84,15 +85,17 @@ npm run dev
 
 **Auth flow.** The React app signs in with the Firebase Web SDK and attaches the ID token as `Authorization: Bearer …` to every `/api` call. `server/src/middleware/auth.ts` verifies it with the Firebase Admin SDK and upserts a `User` row, so the rest of the API works with our own user ids. Nothing under `/api` is reachable without a valid token.
 
-**Permissions.** `server/src/lib/access.ts` has `requireMember` / `requireOrganiser` / `requireAdmin` / `requireSessionManager`. Members see approved members, sessions, leaderboards and player stats and can only write their *own* result row. Organisers can additionally create game days and edit/delete/seat players on the ones they created. Admins can do all of that on any game day, plus see pending requests + the invite code, fill in a result on a player's behalf, approve/reject requests, change roles, and remove members. A group always keeps at least one admin.
+**Permissions.** `server/src/lib/access.ts` has `requireMember` / `requireOrganiser` / `requireAdmin` / `requireSessionManager`. Members see approved members, sessions, leaderboards and player stats and can only write their *own* result row. Organisers can additionally create game days and edit/delete/seat players on the ones they created. Admins can do all of that on any game day, plus see pending requests + the invite code, fill in a result on a player's behalf, approve/reject requests, change roles, and remove members. A group always keeps at least one admin. Highlights reuse `requireSessionManager` as-is — creating, editing or deleting a highlight follows the exact same rule as editing the game day it belongs to (admin: any session, organiser: only sessions they created); watching a highlight just needs membership.
 
 **Chip purchases.** `ChipTransfer` rows (session, seller, buyer, amount). The API keeps `SessionResult.chipsBought` / `chipsSold` in sync so every stats query just uses `buyIn + chipsBought` and `cashOut + chipsSold`. A player can only record purchases where *they* are the buyer (admins can record any); buyer, seller or admin can delete one.
 
 **Join flow.** Admin shares `https://<app>/join/<CODE>` or just the code → user requests to join (membership `PENDING`) → admin approves in the group's *Manage* tab.
 
-**Data model** (`server/prisma/schema.prisma`): `User`, `Group`, `Membership` (role ADMIN/ORGANISER/MEMBER + status), `Session`, `SessionResult` (one per seated player; `cashOut` null until submitted; `chipsBought`/`chipsSold` denormalised), `ChipTransfer`, `SoloGame`.
+**Data model** (`server/prisma/schema.prisma`): `User`, `Group`, `Membership` (role ADMIN/ORGANISER/MEMBER + status), `Session`, `SessionResult` (one per seated player; `cashOut` null until submitted; `chipsBought`/`chipsSold` denormalised), `ChipTransfer`, `SoloGame`, `Highlight` (belongs to a `Session`; optional title) with `HighlightCard` (exactly 5, `position` 0–4 = flop/flop/flop/turn/river) and `HighlightPlayer` (one per included player; `revealedAt` is a `RevealStage` enum — `START`/`FLOP`/`TURN`/`RIVER` — plus two optional hole cards).
 
 **Avatars.** The API signs a Cloudinary upload (`POST /api/me/avatar/sign`); the browser uploads straight to Cloudinary, then saves the returned URL via `PATCH /api/me`. The API secret never leaves the server.
+
+**Highlights.** `POST`/`PATCH` validate with Zod: exactly 5 community cards, no card (community or hole) reused elsewhere in the same highlight, and every included player must actually be seated in that session (a `SessionResult` row must exist). A `PATCH` replaces the highlight's cards and players wholesale (delete-then-recreate in one transaction) rather than diffing — simpler, and a highlight is small enough that this is cheap. Card art lives in `client/src/assets/images/cards/` (52 faces named `${suit}-${rank}.png`, e.g. `spade-A.png`, `club-10.png`, plus one `card-back.png`) and `client/src/assets/images/table/` (the felt texture), both loaded with `import.meta.glob` in `client/src/lib/cards.ts` so adding or renaming a card file needs no code change. Every card image is 500×700 (5:7) — `PlayingCard` (`client/src/components/highlights/playing-card.tsx`) always scales by width only (`aspect-[5/7]`), so cards never stretch. The flip itself is a 2D horizontal squeeze (scaleX 1→0→1, swapping the image at the pinch point) rather than a 3D `rotateY`/`backface-visibility` flip — that more "realistic" technique turned out to silently fail to paint the image at all on Chromium builds without GPU compositing (a broken-image icon instead of the card face), which was too risky given this needs to work across whatever PCs/phones/tablets people actually watch a highlight on.
 
 ## API summary
 
@@ -116,6 +119,9 @@ npm run dev
 | PUT | `/api/groups/:id/sessions/:sid/results/me` (or `/:userId` for admins) | member |
 | POST | `/api/groups/:id/sessions/:sid/transfers` `{fromUserId, amount}` | member (as buyer) / admin |
 | DELETE | `/api/groups/:id/sessions/:sid/transfers/:tid` | buyer, seller or admin |
+| GET/POST | `/api/groups/:id/sessions/:sid/highlights` | member / admin or organiser (own game days) |
+| PATCH/DELETE | `/api/groups/:id/sessions/:sid/highlights/:hid` | admin or organiser (own game days) |
+
 | GET/POST | `/api/solo` · PATCH/DELETE `/api/solo/:id` | me |
 
 ## Deploying to Railway (single service)
@@ -157,3 +163,5 @@ If you ever want the React app on Vercel/Netlify instead: deploy `client/` there
 | `npm run db:migrate` | apply schema changes |
 | `npm run db:studio` | Prisma Studio — browse the DB |
 | `npm run build` | production builds for both |
+
+Whenever you pull a change that adds a Prisma migration (like the Highlights feature's `20260914120000_highlights`), run `npm run db:migrate` once locally against your own Postgres before you'll see it reflected, then commit and push as usual — Railway applies pending migrations automatically on deploy.

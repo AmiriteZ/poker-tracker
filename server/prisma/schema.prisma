@@ -187,6 +187,8 @@ model HighlightPlayer {
   holeRank2   String?
   holeSuit2   String?
   seatOrder   Int         @default(0)
+  /// Several players can win the same hand (split pot), but a highlight with players needs at least one.
+  isWinner    Boolean     @default(false)
 
   highlight Highlight @relation(fields: [highlightId], references: [id], onDelete: Cascade)
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)

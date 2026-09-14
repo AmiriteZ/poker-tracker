@@ -162,6 +162,8 @@ export interface HighlightPlayerRow {
   revealedAt: RevealStage;
   hole1: { rank: string; suit: string } | null;
   hole2: { rank: string; suit: string } | null;
+  /** Split pots mean several players can win the same hand. */
+  isWinner: boolean;
 }
 
 export interface Highlight {

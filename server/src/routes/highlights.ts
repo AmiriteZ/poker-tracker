@@ -18,6 +18,7 @@ const playerSchema = z.object({
   revealedAt: z.enum(REVEAL_STAGES).default("START"),
   hole1: cardSchema.nullable().optional(),
   hole2: cardSchema.nullable().optional(),
+  isWinner: z.boolean().default(false),
 });
 
 // The 5 community slots are always flop(0-2)/turn(3)/river(4) — fixed positions, not free-form.
@@ -45,6 +46,27 @@ function assertNoDuplicateCards(cards: Card[], players: { hole1?: Card | null; h
     claim(p.hole1, `player ${i + 1}'s hand`);
     claim(p.hole2, `player ${i + 1}'s hand`);
   });
+}
+
+/** Shared create/update checks. A pot can be split, so several winners are fine — but a hand with players and nobody winning it isn't. */
+async function validatePlayers(sessionId: string, players: z.infer<typeof playerSchema>[]) {
+  const userIds = players.map((p) => p.userId);
+  if (new Set(userIds).size !== userIds.length) throw badRequest("A player can only appear once in a highlight");
+  if (players.length && !players.some((p) => p.isWinner)) throw badRequest("Mark at least one player as the winner of this hand");
+  await assertSeated(sessionId, userIds);
+}
+
+function playerRows(players: z.infer<typeof playerSchema>[]) {
+  return players.map((p, seatOrder) => ({
+    userId: p.userId,
+    revealedAt: p.revealedAt,
+    holeRank1: p.hole1?.rank ?? null,
+    holeSuit1: p.hole1?.suit ?? null,
+    holeRank2: p.hole2?.rank ?? null,
+    holeSuit2: p.hole2?.suit ?? null,
+    isWinner: p.isWinner,
+    seatOrder,
+  }));
 }
 
 async function assertSeated(sessionId: string, userIds: string[]) {
@@ -79,6 +101,7 @@ function serialize(h: NonNullable<HighlightRow>) {
       revealedAt: p.revealedAt,
       hole1: p.holeRank1 && p.holeSuit1 ? { rank: p.holeRank1, suit: p.holeSuit1 } : null,
       hole2: p.holeRank2 && p.holeSuit2 ? { rank: p.holeRank2, suit: p.holeSuit2 } : null,
+      isWinner: p.isWinner,
     })),
   };
 }
@@ -106,9 +129,7 @@ highlightsRouter.post(
     await requireSessionManager(req.user.id, groupId, sessionId);
     const body = highlightBody.parse(req.body);
 
-    const userIds = body.players.map((p) => p.userId);
-    if (new Set(userIds).size !== userIds.length) throw badRequest("A player can only appear once in a highlight");
-    await assertSeated(sessionId, userIds);
+    await validatePlayers(sessionId, body.players);
     assertNoDuplicateCards(body.cards, body.players);
 
     const created = await prisma.highlight.create({
@@ -117,17 +138,7 @@ highlightsRouter.post(
         title: body.title || null,
         createdById: req.user.id,
         cards: { create: body.cards.map((c, position) => ({ position, rank: c.rank, suit: c.suit })) },
-        players: {
-          create: body.players.map((p, seatOrder) => ({
-            userId: p.userId,
-            revealedAt: p.revealedAt,
-            holeRank1: p.hole1?.rank ?? null,
-            holeSuit1: p.hole1?.suit ?? null,
-            holeRank2: p.hole2?.rank ?? null,
-            holeSuit2: p.hole2?.suit ?? null,
-            seatOrder,
-          })),
-        },
+        players: { create: playerRows(body.players) },
       },
     });
     res.status(201).json(serialize((await loadOne(created.id))!));
@@ -150,9 +161,7 @@ highlightsRouter.patch(
     await requireHighlightManager(groupId, sessionId, highlightId, req.user.id);
     const body = highlightBody.parse(req.body);
 
-    const userIds = body.players.map((p) => p.userId);
-    if (new Set(userIds).size !== userIds.length) throw badRequest("A player can only appear once in a highlight");
-    await assertSeated(sessionId, userIds);
+    await validatePlayers(sessionId, body.players);
     assertNoDuplicateCards(body.cards, body.players);
 
     // Nested collections (cards/players) are wholesale-replaced rather than diffed —
@@ -165,17 +174,7 @@ highlightsRouter.patch(
         data: {
           title: body.title || null,
           cards: { create: body.cards.map((c, position) => ({ position, rank: c.rank, suit: c.suit })) },
-          players: {
-            create: body.players.map((p, seatOrder) => ({
-              userId: p.userId,
-              revealedAt: p.revealedAt,
-              holeRank1: p.hole1?.rank ?? null,
-              holeSuit1: p.hole1?.suit ?? null,
-              holeRank2: p.hole2?.rank ?? null,
-              holeSuit2: p.hole2?.suit ?? null,
-              seatOrder,
-            })),
-          },
+          players: { create: playerRows(body.players) },
         },
       });
     });

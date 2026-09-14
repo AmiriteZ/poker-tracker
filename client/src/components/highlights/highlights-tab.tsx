@@ -5,6 +5,7 @@ import { Clapperboard, Pencil, Play, Plus, Trash2 } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import type { Highlight, PublicUser } from "@/lib/types";
 import type { Card } from "@/lib/cards";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card as UiCard, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -103,8 +104,15 @@ export function HighlightsTab({
 
                   {h.players.length ? (
                     <div className="flex items-center -space-x-2">
-                      {h.players.slice(0, 6).map((p) => (
-                        <UserAvatar key={p.id} name={p.user.displayName} src={p.user.avatarUrl} className="size-7 border-2 border-card" textClassName="text-[10px]" />
+                      {/* Later avatars overlap earlier ones, so winners go last to keep their ring fully visible. */}
+                      {[...h.players].sort((a, b) => Number(a.isWinner) - Number(b.isWinner)).slice(0, 6).map((p) => (
+                        <UserAvatar
+                          key={p.id}
+                          name={p.user.displayName}
+                          src={p.user.avatarUrl}
+                          className={cn("size-7 border-2 border-card", p.isWinner && "ring-2 ring-win")}
+                          textClassName="text-[10px]"
+                        />
                       ))}
                       {h.players.length > 6 ? (
                         <span className="ml-3 text-xs text-muted-foreground">+{h.players.length - 6} more</span>

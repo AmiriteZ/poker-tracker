@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pause, Play, RotateCcw, SkipForward } from "lucide-react";
+import { Pause, Play, RotateCcw, SkipForward, Trophy } from "lucide-react";
 import type { Highlight, RevealStage } from "@/lib/types";
 import { COMMUNITY_LABELS, type Card } from "@/lib/cards";
 import { cn } from "@/lib/utils";
@@ -98,7 +98,12 @@ export function HighlightPlayer({ highlight }: { highlight: Highlight }) {
   };
   const togglePlay = () => (finished ? replay() : setPlaying((p) => !p));
 
-  const playersWithCards = highlight.players.filter((p) => p.hole1 || p.hole2);
+  // Every player in the hand gets a row (a winner with no recorded hole cards still needs somewhere
+  // to glow); rows without cards just show the name.
+  const players = highlight.players;
+  // The winner glow is the payoff of the replay, so it only appears once the last beat has landed —
+  // never during Play, and immediately on Skip.
+  const showWinners = finished;
 
   return (
     <div className="space-y-4">
@@ -113,15 +118,27 @@ export function HighlightPlayer({ highlight }: { highlight: Highlight }) {
         </div>
       </TableFrame>
 
-      {playersWithCards.length ? (
+      {players.length ? (
         <div className="grid gap-2 sm:grid-cols-2">
-          {playersWithCards.map((p) => {
+          {players.map((p) => {
             const up = faceUpPlayers.has(p.user.id);
+            const won = showWinners && p.isWinner;
             return (
-              <div key={p.id} className={cn("flex items-center gap-3 rounded-lg border bg-card p-2.5 transition-colors", up ? "border-primary/40" : "")}>
+              <div
+                key={p.id}
+                className={cn(
+                  "flex items-center gap-3 rounded-lg border bg-card p-2.5 transition-[border-color,box-shadow] duration-700",
+                  won ? "border-win shadow-[0_0_0_1px_hsl(var(--win)/0.6),0_0_22px_hsl(var(--win)/0.45)]" : up ? "border-primary/40" : ""
+                )}
+              >
                 <UserAvatar name={p.user.displayName} src={p.user.avatarUrl} className="size-8 shrink-0" />
                 <div className="min-w-0 flex-1 truncate text-sm font-medium">{p.user.displayName}</div>
-                <div className="flex gap-1">
+                {won ? (
+                  <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-win animate-fade-in">
+                    <Trophy className="size-3.5" /> Winner
+                  </span>
+                ) : null}
+                <div className="flex shrink-0 gap-1">
                   {[p.hole1, p.hole2].filter((c): c is Card => !!c).map((c, i) => (
                     <PlayingCard key={i} card={c} faceUp={up} animated widthClassName="w-9" />
                   ))}

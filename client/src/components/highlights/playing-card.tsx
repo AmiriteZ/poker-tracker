@@ -73,7 +73,12 @@ export function PlayingCard({
   );
 }
 
-/** An empty community/hole-card slot — dashed outline with a plus, matching the app's EmptyState language. */
+/**
+ * An empty community/hole-card slot — dashed outline with a plus, matching the app's EmptyState language.
+ * Width comes from `widthClassName` alone (no `w-full` here — tailwind-merge keeps the *last* width
+ * class, so a `w-full` would silently override the caller's `w-9` and let the slot grow into its
+ * neighbours; that's exactly how the second hole-card slot ended up sitting on top of the remove button).
+ */
 export function EmptyCardSlot({ widthClassName = "w-14", className, onClick, label }: { widthClassName?: string; className?: string; onClick?: () => void; label?: string }) {
   return (
     <button
@@ -81,8 +86,8 @@ export function EmptyCardSlot({ widthClassName = "w-14", className, onClick, lab
       onClick={onClick}
       aria-label={label ?? "Add card"}
       className={cn(
+        "flex aspect-[5/7] shrink-0 items-center justify-center rounded-[10%] border-2 border-dashed border-muted-foreground/30 bg-black/5 text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary dark:bg-white/5",
         widthClassName,
-        "flex aspect-[5/7] w-full shrink-0 items-center justify-center rounded-[10%] border-2 border-dashed border-muted-foreground/30 bg-black/5 text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary dark:bg-white/5",
         className
       )}
     >

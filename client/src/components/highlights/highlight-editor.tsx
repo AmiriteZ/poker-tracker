@@ -1,10 +1,11 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Plus, UserMinus } from "lucide-react";
+import { Plus, Trophy, UserMinus } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import type { Highlight, PublicUser, RevealStage } from "@/lib/types";
 import { COMMUNITY_LABELS, REVEAL_STAGE_LABEL, type Card } from "@/lib/cards";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,10 +18,12 @@ import { CardPicker } from "./card-picker";
 interface EditorPlayer {
   userId: string;
   user: PublicUser;
-  revealedAt: RevealStage;
   hole1: Card | null;
   hole2: Card | null;
+  isWinner: boolean;
 }
+
+const REVEAL_STAGES: RevealStage[] = ["START", "FLOP", "TURN", "RIVER"];
 
 export function HighlightEditor({
   groupId,
@@ -44,8 +47,19 @@ export function HighlightEditor({
     initial?.cards.forEach((c, i) => (base[i] = c as Card));
     return base;
   });
+  // One reveal moment for the whole hand — in practice everyone shows at the same time, so this
+  // lives above the player list rather than being asked per player. (The API still stores it per
+  // player; we just send the same value for each.)
+  const [revealedAt, setRevealedAt] = useState<RevealStage>(initial?.players[0]?.revealedAt ?? "RIVER");
   const [players, setPlayers] = useState<EditorPlayer[]>(
-    () => initial?.players.map((p) => ({ userId: p.user.id, user: p.user, revealedAt: p.revealedAt, hole1: p.hole1 as Card | null, hole2: p.hole2 as Card | null })) ?? []
+    () =>
+      initial?.players.map((p) => ({
+        userId: p.user.id,
+        user: p.user,
+        hole1: p.hole1 as Card | null,
+        hole2: p.hole2 as Card | null,
+        isWinner: p.isWinner,
+      })) ?? []
   );
   const [addPlayerId, setAddPlayerId] = useState("");
   const [picker, setPicker] = useState<{ kind: "community"; index: number } | { kind: "hole"; userId: string; slot: 1 | 2 } | null>(null);
@@ -57,18 +71,19 @@ export function HighlightEditor({
   const addPlayer = () => {
     const user = seatedPlayers.find((u) => u.id === addPlayerId);
     if (!user) return;
-    setPlayers((prev) => [...prev, { userId: user.id, user, revealedAt: "START", hole1: null, hole2: null }]);
+    setPlayers((prev) => [...prev, { userId: user.id, user, hole1: null, hole2: null, isWinner: false }]);
     setAddPlayerId("");
   };
 
   const removePlayer = (userId: string) => setPlayers((prev) => prev.filter((p) => p.userId !== userId));
+  const toggleWinner = (userId: string) => setPlayers((prev) => prev.map((p) => (p.userId === userId ? { ...p, isWinner: !p.isWinner } : p)));
 
   const save = useMutation({
     mutationFn: () => {
       const body = {
         title: title.trim() || null,
         cards: cards.map((c) => c!), // guarded by `canSave` below
-        players: players.map((p) => ({ userId: p.userId, revealedAt: p.revealedAt, hole1: p.hole1, hole2: p.hole2 })),
+        players: players.map((p) => ({ userId: p.userId, revealedAt, hole1: p.hole1, hole2: p.hole2, isWinner: p.isWinner })),
       };
       return initial
         ? api.patch<Highlight>(`/groups/${groupId}/sessions/${sessionId}/highlights/${initial.id}`, body)
@@ -82,11 +97,11 @@ export function HighlightEditor({
     onError: (e) => toast.error(e instanceof ApiError ? e.message : "Could not save the highlight"),
   });
 
-  const canSave = cards.every((c) => c !== null);
-
-  // The slot's own current card is excluded at the call site (via the `current` prop
-  // comparison below) so it stays selectable instead of showing as "used".
-  const pickerUsedCards = () => allChosenCards();
+  const boardComplete = cards.every((c) => c !== null);
+  // A pot can be split, so several winners are fine — but a hand with players and no winner isn't.
+  const needsWinner = players.length > 0 && !players.some((p) => p.isWinner);
+  const canSave = boardComplete && !needsWinner;
+  const blocker = !boardComplete ? "Add all 5 community cards to save." : needsWinner ? "Mark at least one winner to save." : null;
 
   const pickerCurrent: Card | null =
     picker == null
@@ -137,8 +152,23 @@ export function HighlightEditor({
             </div>
           </div>
 
+          <div className="grid gap-1.5 sm:grid-cols-[1fr_auto] sm:items-center">
+            <div>
+              <Label htmlFor="hreveal">Hands revealed</Label>
+              <p className="text-xs text-muted-foreground">When the players' hole cards turn over in the replay.</p>
+            </div>
+            <Select value={revealedAt} onValueChange={(v) => setRevealedAt(v as RevealStage)}>
+              <SelectTrigger id="hreveal" className="w-full sm:w-44"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {REVEAL_STAGES.map((stage) => (
+                  <SelectItem key={stage} value={stage}>{REVEAL_STAGE_LABEL[stage]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <Label>Players in this hand ({players.length})</Label>
               {availableToAdd.length ? (
                 <div className="flex items-center gap-1">
@@ -164,32 +194,61 @@ export function HighlightEditor({
             ) : (
               <div className="space-y-2">
                 {players.map((p) => (
-                  <div key={p.userId} className="flex flex-wrap items-center gap-3 rounded-lg border bg-card p-3">
-                    <UserAvatar name={p.user.displayName} src={p.user.avatarUrl} className="size-8" />
-                    <div className="min-w-0 flex-1 font-medium">{p.user.displayName}</div>
-                    <Select value={p.revealedAt} onValueChange={(v) => setPlayers((prev) => prev.map((x) => (x.userId === p.userId ? { ...x, revealedAt: v as RevealStage } : x)))}>
-                      <SelectTrigger className="h-8 w-40 shrink-0"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {(["START", "FLOP", "TURN", "RIVER"] as const).map((stage) => (
-                          <SelectItem key={stage} value={stage}>{REVEAL_STAGE_LABEL[stage]}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <div className="flex gap-1.5">
-                      {([1, 2] as const).map((slot) => {
-                        const c = slot === 1 ? p.hole1 : p.hole2;
-                        return c ? (
-                          <button key={slot} type="button" onClick={() => setPicker({ kind: "hole", userId: p.userId, slot })} className="transition-transform hover:-translate-y-0.5">
-                            <PlayingCard card={c} widthClassName="w-9" />
-                          </button>
-                        ) : (
-                          <EmptyCardSlot key={slot} widthClassName="w-9" onClick={() => setPicker({ kind: "hole", userId: p.userId, slot })} label="Add hole card" />
-                        );
-                      })}
-                    </div>
-                    <Button type="button" size="icon" variant="ghost" aria-label="Remove player" onClick={() => removePlayer(p.userId)}>
+                  /*
+                   * Phone: a fixed two-line layout — [avatar · name · remove] over [hole cards · winner] —
+                   * instead of letting flex-wrap break wherever the name length happens to push it.
+                   * From `sm` up the second line is flattened (`sm:contents`) into one row, with the
+                   * remove button ordered last so it stays on the far right and away from the card slots.
+                   */
+                  <div
+                    key={p.userId}
+                    className={cn(
+                      "grid grid-cols-[auto_1fr_auto] items-center gap-x-3 gap-y-3 rounded-lg border bg-card p-3 transition-colors sm:flex",
+                      p.isWinner && "border-win/50"
+                    )}
+                  >
+                    <UserAvatar name={p.user.displayName} src={p.user.avatarUrl} className="size-8 shrink-0" />
+                    <div className="min-w-0 truncate font-medium sm:flex-1">{p.user.displayName}</div>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="-my-1 -mr-1 shrink-0 justify-self-end sm:order-last sm:ml-auto"
+                      aria-label={`Remove ${p.user.displayName}`}
+                      onClick={() => removePlayer(p.userId)}
+                    >
                       <UserMinus className="size-4" />
                     </Button>
+                    <div className="col-span-3 flex items-center gap-3 sm:contents">
+                      <div className="flex shrink-0 gap-1.5">
+                        {([1, 2] as const).map((slot) => {
+                          const c = slot === 1 ? p.hole1 : p.hole2;
+                          return c ? (
+                            <button key={slot} type="button" onClick={() => setPicker({ kind: "hole", userId: p.userId, slot })} className="shrink-0 transition-transform hover:-translate-y-0.5">
+                              <PlayingCard card={c} widthClassName="w-11 sm:w-9" />
+                            </button>
+                          ) : (
+                            <EmptyCardSlot
+                              key={slot}
+                              widthClassName="w-11 sm:w-9"
+                              onClick={() => setPicker({ kind: "hole", userId: p.userId, slot })}
+                              label={`Add ${p.user.displayName}'s hole card ${slot}`}
+                            />
+                          );
+                        })}
+                      </div>
+                      <button
+                        type="button"
+                        aria-pressed={p.isWinner}
+                        onClick={() => toggleWinner(p.userId)}
+                        className={cn(
+                          "ml-auto inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-colors sm:ml-0 sm:h-8 sm:px-2.5",
+                          p.isWinner ? "border-win/40 bg-win/15 text-win" : "border-input text-muted-foreground hover:bg-accent hover:text-foreground"
+                        )}
+                      >
+                        <Trophy className="size-3.5" /> {p.isWinner ? "Winner" : "Won?"}
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -197,7 +256,7 @@ export function HighlightEditor({
           </div>
 
           <DialogFooter>
-            {!canSave ? <p className="mr-auto self-center text-xs text-muted-foreground">Add all 5 community cards to save.</p> : null}
+            {blocker ? <p className="mr-auto self-center text-xs text-muted-foreground">{blocker}</p> : null}
             <Button type="submit" disabled={!canSave} loading={save.isPending}>
               {initial ? "Save changes" : "Create highlight"}
             </Button>
@@ -208,7 +267,7 @@ export function HighlightEditor({
           <CardPicker
             open
             onOpenChange={(o) => !o && setPicker(null)}
-            usedCards={pickerUsedCards().filter((c) => !(pickerCurrent && c.rank === pickerCurrent.rank && c.suit === pickerCurrent.suit))}
+            usedCards={allChosenCards().filter((c) => !(pickerCurrent && c.rank === pickerCurrent.rank && c.suit === pickerCurrent.suit))}
             current={pickerCurrent}
             onSelect={applyPick}
           />

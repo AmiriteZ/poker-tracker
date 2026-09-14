@@ -5,7 +5,6 @@ import { Plus, UserMinus } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import type { Highlight, PublicUser, RevealStage } from "@/lib/types";
 import { COMMUNITY_LABELS, REVEAL_STAGE_LABEL, type Card } from "@/lib/cards";
-import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
